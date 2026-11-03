@@ -1,0 +1,1341 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>コマ割りツール</title>
+<meta name="description" content="画像を元の画質のまま1枚にまとめるコマ割りツール。ドラッグ＆ドロップで並べて、線の位置・傾き・色・太さも自由。ブラウザだけで動き、画像は外に送られません。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="コマ割りツール｜画像を、元の画質のまま1枚に">
+<meta property="og:description" content="ドラッグ＆ドロップで並べるだけ。斜めのコマもOK。ブラウザだけで動き、画像は外に送られません。">
+<meta property="og:url" content="https://amatsumugishion.github.io/koma-tool/">
+<meta property="og:image" content="https://amatsumugishion.github.io/koma-tool/ogp.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root {
+  --bg: #eef0f3; --panel: #ffffff; --text: #1d2127; --sub: #69707b; --border: #d9dde3;
+  --accent: #2f6fec; --accent-weak: #e1eaff; --warn: #c2410c; --stage: #dfe3e8;
+  --btn: #f5f6f8; --btn-hover: #e8ebef;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181b; --panel: #202328; --text: #e5e7ea; --sub: #99a0aa; --border: #353940;
+    --accent: #6b9bff; --accent-weak: #24314d; --warn: #fb923c; --stage: #0e1012;
+    --btn: #2a2e34; --btn-hover: #343941;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 13px/1.5 "Yu Gothic UI", "Meiryo UI", "Hiragino Sans", system-ui, sans-serif;
+  display: grid; grid-template-columns: 1fr 300px; grid-template-rows: auto 1fr auto;
+  grid-template-areas: "top top" "stage side" "hint side";
+  overflow: hidden;
+}
+header {
+  grid-area: top; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+header h1 { font-size: 15px; margin: 0; font-weight: 700; white-space: nowrap; }
+.group { display: flex; align-items: center; gap: 6px; }
+.label { color: var(--sub); font-size: 12px; white-space: nowrap; }
+.spacer { flex: 1; }
+button {
+  font: inherit; color: var(--text); background: var(--btn); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap;
+}
+button:hover { background: var(--btn-hover); }
+button:disabled { opacity: .4; cursor: default; background: var(--btn); }
+button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.primary:hover { filter: brightness(1.08); }
+a.btnlink {
+  color: var(--text); background: var(--btn); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; text-decoration: none; white-space: nowrap;
+}
+a.btnlink:hover { background: var(--btn-hover); }
+.count button { width: 30px; padding: 4px 0; }
+.tpls { display: flex; gap: 6px; flex-wrap: wrap; }
+.tpl { padding: 3px; line-height: 0; }
+.tpl canvas { width: 40px; height: 40px; display: block; border-radius: 3px; }
+.tpl.on { background: var(--accent); }
+
+#stage {
+  grid-area: stage; position: relative; overflow: hidden; background: var(--stage);
+  display: flex; align-items: center; justify-content: center;
+}
+#view { box-shadow: 0 2px 14px rgba(0, 0, 0, .2); touch-action: none; }
+#stage.dragging::after {
+  content: "ここに画像をドロップ"; position: absolute; inset: 10px; border: 3px dashed var(--accent);
+  border-radius: 10px; pointer-events: none; display: flex; align-items: flex-start; justify-content: center;
+  color: var(--accent); font-weight: 700; padding-top: 4px;
+}
+#sizeInfo {
+  position: absolute; left: 12px; bottom: 8px; color: var(--sub); font-size: 12px;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+#hint {
+  grid-area: hint; padding: 6px 14px; background: var(--panel); border-top: 1px solid var(--border);
+  color: var(--sub); font-size: 12px;
+}
+#hint b { color: var(--text); font-weight: 600; }
+
+aside {
+  grid-area: side; background: var(--panel); border-left: 1px solid var(--border);
+  overflow-y: auto; padding: 0 14px 20px;
+}
+section { border-bottom: 1px solid var(--border); padding: 12px 0; }
+section:last-child { border-bottom: 0; }
+section h2 { font-size: 12px; margin: 0 0 8px; color: var(--sub); font-weight: 600; }
+.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+.row > .label { min-width: 44px; }
+input[type=number], select {
+  font: inherit; color: var(--text); background: var(--btn); border: 1px solid var(--border);
+  border-radius: 5px; padding: 3px 6px;
+}
+input[type=number] { width: 76px; font-variant-numeric: tabular-nums; }
+input[type=range] { flex: 1; min-width: 80px; accent-color: var(--accent); }
+input[type=color] { width: 34px; height: 26px; padding: 0 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--btn); }
+input[type=checkbox] { accent-color: var(--accent); }
+.sw { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid var(--border); }
+.note { color: var(--sub); font-size: 11.5px; margin: 4px 0 0; }
+.warn { color: var(--warn); font-weight: 600; }
+
+#list { list-style: none; margin: 0; padding: 0; }
+#list li {
+  display: flex; align-items: center; gap: 8px; padding: 5px; border-radius: 7px;
+  border: 1px solid transparent; cursor: pointer;
+}
+#list li:hover { background: var(--btn); }
+#list li.sel { border-color: var(--accent); background: var(--accent-weak); }
+#list li.over { outline: 2px dashed var(--accent); }
+#list .num {
+  width: 20px; height: 20px; border-radius: 50%; background: var(--btn-hover); flex: none;
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+}
+#list .thumb {
+  width: 44px; height: 44px; flex: none; border-radius: 4px; object-fit: cover;
+  background: var(--btn-hover); border: 1px solid var(--border);
+}
+#list .meta { flex: 1; min-width: 0; }
+#list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#list .sub { color: var(--sub); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+#list .x { padding: 0 7px; line-height: 20px; }
+.hidden { display: none !important; }
+
+#toast {
+  position: fixed; left: 50%; bottom: 46px; transform: translateX(-50%);
+  background: rgba(20, 22, 26, .92); color: #fff; padding: 8px 16px; border-radius: 8px;
+  font-size: 13px; pointer-events: none; opacity: 0; transition: opacity .2s; max-width: 80vw;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>コマ割りツール</h1>
+  <div class="group"><span class="label">コマ数</span><div class="group count" id="counts"></div></div>
+  <div class="group"><span class="label">型</span><div class="tpls" id="tpls"></div></div>
+  <div class="spacer"></div>
+  <div class="group">
+    <a id="dlBtn" class="btnlink hidden" download="コマ割りツール.html" title="このツールを1つのHTMLファイルとして保存します。保存したファイルをダブルクリックすれば、ネットなしでも使えます">⤓ オフライン用に保存</a>
+    <button id="openBtn" title="画像ファイルを選んで入れる">画像を開く…</button>
+    <button id="undoBtn" title="元に戻す (Ctrl+Z)">↶ 戻す</button>
+    <button id="redoBtn" title="やり直し (Ctrl+Y)">↷</button>
+    <button id="copyBtn" title="完成画像をクリップボードへ (Ctrl+C)">コピー</button>
+    <button id="saveBtn" class="primary" title="PNGで保存 (Ctrl+S)">PNGで保存</button>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" multiple hidden>
+</header>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="sizeInfo"></div>
+</main>
+
+<div id="hint">
+  <b>ドロップ</b> 画像をコマへ（複数まとめてOK）　<b>ドラッグ</b> 画像を動かす（Shiftで横か縦にまっすぐ）<b>ホイール</b> 拡大縮小（Shiftで細かく）　<b>ダブルクリック</b> コマに合わせ直す　<b>Ctrl+ドラッグ</b> コマの入れ替え　<b>線をドラッグ</b> 線を動かす・端の●で傾ける（Shiftで吸着なし）　<b>Ctrl+V</b> 貼り付け　<b>Ctrl+C</b> コピー　<b>Ctrl+Z</b> 戻す
+</div>
+
+<aside>
+  <section id="panelTools" class="hidden">
+    <h2 id="panelTitle">コマ</h2>
+    <div class="row"><span class="label">拡大率</span>
+      <input type="range" id="zoomRange" min="-4" max="2" step="0.01">
+      <input type="number" id="zoomNum" min="1" max="1000" step="1" style="width:64px">%
+    </div>
+    <p class="note" id="zoomNote"></p>
+    <div class="row">
+      <button data-fit="cover" title="コマ全体を埋める">埋める</button>
+      <button data-fit="contain" title="画像全体が見えるように">全体を入れる</button>
+      <button data-fit="actual" title="元画像のピクセルそのまま">100%（等倍）</button>
+    </div>
+    <div class="row"><label><input type="checkbox" id="noGapChk"> 背景が出ないように端で止める</label></div>
+    <p class="note">Shift＋ドラッグで横か縦にまっすぐ動かせます。矢印キーでも1px（Shiftで10px）ずつ動きます。</p>
+    <div class="row">
+      <button id="openHere">このコマに画像を開く…</button>
+      <button id="removeHere">画像を外す</button>
+    </div>
+  </section>
+
+  <section id="lineTools" class="hidden">
+    <h2>選んだ線</h2>
+    <div class="row">
+      <button id="vertBtn">垂直にする</button>
+      <button id="horzBtn">水平にする</button>
+    </div>
+    <p class="note">線の真ん中をドラッグで平行移動、端の●をドラッグで傾きを変えます。一直線につながった線は一緒に動きます（Shiftを押しながらで別々に）。</p>
+  </section>
+
+  <section>
+    <h2>線</h2>
+    <div class="row"><span class="label">色</span>
+      <input type="color" id="lineColor">
+      <button class="sw" data-color="#000000" style="background:#000" title="黒"></button>
+      <button class="sw" data-color="#ffffff" style="background:#fff" title="白"></button>
+      <button class="sw" data-color="#808080" style="background:#808080" title="グレー"></button>
+    </div>
+    <div class="row"><span class="label">太さ</span>
+      <input type="range" id="lwRange" min="0" max="60" step="0.5">
+      <input type="number" id="lwNum" min="0" max="500" step="0.5" style="width:64px">px
+    </div>
+    <div class="row"><label><input type="checkbox" id="frameChk"> 外側にも枠線を引く</label></div>
+    <div class="row"><span class="label">背景</span><input type="color" id="bgColor"><span class="note" style="margin:0">空いたところの色</span></div>
+  </section>
+
+  <section>
+    <h2>完成サイズ</h2>
+    <div class="row"><span class="label">縦横比</span>
+      <select id="aspect">
+        <option value="1:1">1:1 正方形</option>
+        <option value="4:3">4:3 横長</option>
+        <option value="3:4">3:4 縦長</option>
+        <option value="3:2">3:2 横長</option>
+        <option value="2:3">2:3 縦長</option>
+        <option value="16:9">16:9 横長</option>
+        <option value="9:16">9:16 縦長</option>
+        <option value="free">自由</option>
+      </select>
+    </div>
+    <div class="row"><label><input type="checkbox" id="autoChk"> 元画像に合わせて自動</label></div>
+    <div class="row"><span class="label">幅×高さ</span>
+      <input type="number" id="wNum" min="16" max="8192"> × <input type="number" id="hNum" min="16" max="8192"> px
+    </div>
+    <p class="note" id="sizeNote"></p>
+  </section>
+
+  <section>
+    <h2>コマ一覧 <span style="font-weight:400">（ドラッグで入れ替え）</span></h2>
+    <ul id="list"></ul>
+    <div class="row"><button id="clearBtn">全部の画像を外す</button></div>
+  </section>
+</aside>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ===== 状態 =====
+const FRACS = [1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4];  // 線を吸着させる位置
+const MAX_SIDE = 8192;
+const S = {
+  W: 2048, H: 2048, aspect: '1:1', auto: true,
+  lw: 4, color: '#000000', bg: '#ffffff', frame: false,
+  noGap: true,  // 画像を動かしても背景が出ないように止める（好みの設定なので元に戻すの対象外）
+  tpl: '2v', tree: null,
+  panels: [],  // コマ番号順。null か {id, x, y, s}（x,y=画像中心の出力px、s=出力px/元画像px）
+};
+const IMGS = new Map();  // id -> {img, url, name, w, h}
+let imgSeq = 0;
+let G = { leaves: [], splits: [] };
+let sel = null;     // {kind:'panel'|'line', i}
+let hover = null;   // {kind:'panel'|'line'|'end', i, k}
+let drag = null;
+let dropIdx = -1;
+let inside = false;
+let vs = 1;         // 表示倍率（画面px / 出力px）
+
+const $ = id => document.getElementById(id);
+const view = $('view'), vctx = view.getContext('2d');
+const dpr = () => window.devicePixelRatio || 1;
+
+// ===== 型（コマ割りのテンプレート） =====
+// 木構造：葉 = コマ、split = 線（a→b の無限直線で親の多角形を2つに切る）。座標は 0〜1 の正規化。
+const L = () => ({ t: 'leaf' });
+const SP = (ax, ay, bx, by, c0, c1) => ({ t: 'split', a: { x: ax, y: ay }, b: { x: bx, y: by }, c: [c0, c1] });
+const V = (x, c0, c1) => SP(x, 0, x, 1, c0, c1);
+const Hz = (y, c0, c1) => SP(0, y, 1, y, c0, c1);
+const cuts = (n, a, b) => Array.from({ length: n - 1 }, (_, i) => a + (b - a) * (i + 1) / n);
+const chain = (mk, cs, kids) => cs.length ? mk(cs[0], kids[0], chain(mk, cs.slice(1), kids.slice(1))) : kids[0];
+const cols = (n, x0 = 0, x1 = 1) => chain(V, cuts(n, x0, x1), Array.from({ length: n }, L));
+const rows = (n, y0 = 0, y1 = 1) => chain(Hz, cuts(n, y0, y1), Array.from({ length: n }, L));
+const rowsOf = (counts, x0 = 0, x1 = 1) => chain(Hz, cuts(counts.length, 0, 1), counts.map(c => cols(c, x0, x1)));
+const colsOf = counts => chain(V, cuts(counts.length, 0, 1), counts.map(c => rows(c)));
+
+const TEMPLATES = {
+  1: [{ k: '1', n: '1コマ', f: () => L() }],
+  2: [
+    { k: '2v', n: '左右', f: () => cols(2) },
+    { k: '2h', n: '上下', f: () => rows(2) },
+    { k: '2d', n: '斜め ＼', f: () => SP(0, 0, 1, 1, L(), L()) },
+    { k: '2u', n: '斜め ／', f: () => SP(1, 0, 0, 1, L(), L()) },
+    { k: '2s', n: '傾けた左右', f: () => SP(.62, 0, .38, 1, L(), L()) },
+  ],
+  3: [
+    { k: '3l', n: '左大＋右2段', f: () => V(.5, L(), rows(2)) },
+    { k: '3r', n: '右大＋左2段', f: () => V(.5, rows(2), L()) },
+    { k: '3t', n: '上大＋下2列', f: () => Hz(.5, L(), cols(2)) },
+    { k: '3b', n: '下大＋上2列', f: () => Hz(.5, cols(2), L()) },
+    { k: '3v', n: '縦3列', f: () => cols(3) },
+    { k: '3h', n: '横3段', f: () => rows(3) },
+    { k: '3s', n: '斜め3列', f: () => SP(.45, 0, .25, 1, L(), SP(.8, 0, .6, 1, L(), L())) },
+  ],
+  4: [
+    { k: '4g', n: '2×2', f: () => rowsOf([2, 2]) },
+    { k: '4l', n: '左大＋右3段', f: () => V(.5, L(), rows(3)) },
+    { k: '4t', n: '上大＋下3列', f: () => Hz(.5, L(), cols(3)) },
+    { k: '4v', n: '縦4列', f: () => cols(4) },
+    { k: '4h', n: '横4段', f: () => rows(4) },
+  ],
+  5: [
+    { k: '5a', n: '上2＋下3', f: () => rowsOf([2, 3]) },
+    { k: '5b', n: '上3＋下2', f: () => rowsOf([3, 2]) },
+    { k: '5l', n: '左大＋右2×2', f: () => V(.5, L(), rowsOf([2, 2], .5, 1)) },
+    { k: '5c', n: '左2段＋右3段', f: () => colsOf([2, 3]) },
+  ],
+  6: [
+    { k: '6a', n: '2列×3段', f: () => rowsOf([2, 2, 2]) },
+    { k: '6b', n: '3列×2段', f: () => rowsOf([3, 3]) },
+  ],
+};
+const findTpl = key => Object.values(TEMPLATES).flat().find(t => t.k === key);
+const countOf = key => +Object.keys(TEMPLATES).find(c => TEMPLATES[c].some(t => t.k === key));
+
+// ===== 幾何 =====
+const sub = (p, q) => ({ x: p.x - q.x, y: p.y - q.y });
+const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+const side = (a, b, p) => (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+
+// 半平面 sg*side>=0 で多角形を切る（Sutherland–Hodgman）
+function clipHalf(poly, a, b, sg) {
+  const out = [], n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const p = poly[i], q = poly[(i + 1) % n];
+    const fp = sg * side(a, b, p), fq = sg * side(a, b, q);
+    if (fp >= 0) out.push(p);
+    if ((fp > 0 && fq < 0) || (fp < 0 && fq > 0)) {
+      const t = fp / (fp - fq);
+      out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+    }
+  }
+  return out;
+}
+
+// 直線 a→b が多角形の中を通る区間。a→b の向きに並べて返す
+function lineThroughPoly(poly, a, b) {
+  const pts = [], n = poly.length;
+  const eps = 1e-9 * (Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + 1) * 1e3;
+  for (let i = 0; i < n; i++) {
+    const p = poly[i], q = poly[(i + 1) % n];
+    const fp = side(a, b, p), fq = side(a, b, q);
+    if (Math.abs(fp) <= eps) pts.push(p);
+    else if (Math.abs(fq) > eps && fp * fq < 0) {
+      const t = fp / (fp - fq);
+      pts.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+    }
+  }
+  if (pts.length < 2) return null;
+  const d = sub(b, a), proj = p => (p.x - a.x) * d.x + (p.y - a.y) * d.y;
+  let lo = pts[0], hi = pts[0];
+  for (const p of pts) { if (proj(p) < proj(lo)) lo = p; if (proj(p) > proj(hi)) hi = p; }
+  return dist(lo, hi) < 1e-9 ? null : [lo, hi];
+}
+
+function area(poly) {
+  let A = 0;
+  for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; A += p.x * q.y - q.x * p.y; }
+  return Math.abs(A) / 2;
+}
+function centroid(poly) {
+  let A = 0, cx = 0, cy = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length], c = p.x * q.y - q.x * p.y;
+    A += c; cx += (p.x + q.x) * c; cy += (p.y + q.y) * c;
+  }
+  if (Math.abs(A) < 1e-12) {
+    const n = poly.length || 1;
+    return { x: poly.reduce((s, p) => s + p.x, 0) / n, y: poly.reduce((s, p) => s + p.y, 0) / n };
+  }
+  return { x: cx / (3 * A), y: cy / (3 * A) };
+}
+function bbox(poly) {
+  if (!poly.length) return { x: 0, y: 0, w: 0, h: 0 };
+  const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
+  const x = Math.min(...xs), y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+function pointInPoly(p, poly) {
+  let inn = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inn = !inn;
+  }
+  return inn;
+}
+function distToSeg(p, a, b) {
+  const d = sub(b, a), l2 = d.x * d.x + d.y * d.y;
+  const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * d.x + (p.y - a.y) * d.y) / l2)) : 0;
+  return dist(p, { x: a.x + d.x * t, y: a.y + d.y * t });
+}
+function distToLine(a, b, p) { return Math.abs(side(a, b, p)) / (dist(a, b) || 1); }
+function closestOnBoundary(poly, m) {
+  let best = null;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length], d = sub(q, p), l2 = d.x * d.x + d.y * d.y;
+    if (!l2) continue;
+    const t = Math.max(0, Math.min(1, ((m.x - p.x) * d.x + (m.y - p.y) * d.y) / l2));
+    const pt = { x: p.x + d.x * t, y: p.y + d.y * t }, dd = dist(pt, m);
+    if (!best || dd < best.d) best = { pt, ed: d, d: dd };
+  }
+  return best;
+}
+const nearest = (v, cands, thr) => {
+  let best = null;
+  for (const c of cands) if (Math.abs(c - v) <= thr && (best === null || Math.abs(c - v) < Math.abs(best - v))) best = c;
+  return best;
+};
+
+// 木から各コマの多角形と各線の区間を出す
+function geomOf(tree, W, H) {
+  const leaves = [], splits = [];
+  const rect = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
+  (function walk(n, poly) {
+    if (n.t === 'leaf') { leaves.push({ node: n, poly, bb: bbox(poly) }); return; }
+    const a = { x: n.a.x * W, y: n.a.y * H }, b = { x: n.b.x * W, y: n.b.y * H };
+    splits.push({ node: n, parent: poly, a, b, seg: lineThroughPoly(poly, a, b) });
+    walk(n.c[0], clipHalf(poly, a, b, 1));
+    walk(n.c[1], clipHalf(poly, a, b, -1));
+  })(tree, rect);
+  return { leaves, splits };
+}
+function computeGeom() { G = geomOf(S.tree, S.W, S.H); }
+function geomValid() {
+  const min = 0.002 * S.W * S.H;
+  return G.splits.every(s => s.seg) && G.leaves.every(l => area(l.poly) >= min);
+}
+const norm = p => ({ x: p.x / S.W, y: p.y / S.H });
+
+// 型を作った直後に、線の向きを「c[0] が読む順で先（上→下、左→右）」にそろえ、端点を親の縁に乗せる
+function orient(tree) {
+  const before = (p, q) => Math.abs(p.y - q.y) > 0.02 ? p.y < q.y : p.x < q.x;
+  (function walk(n, poly) {
+    if (n.t === 'leaf') return;
+    let p0 = clipHalf(poly, n.a, n.b, 1), p1 = clipHalf(poly, n.a, n.b, -1);
+    if (before(centroid(p1), centroid(p0))) { [n.a, n.b] = [n.b, n.a]; [p0, p1] = [p1, p0]; }
+    const seg = lineThroughPoly(poly, n.a, n.b);
+    if (seg) { n.a = { ...seg[0] }; n.b = { ...seg[1] }; }
+    walk(n.c[0], p0); walk(n.c[1], p1);
+  })(tree, [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }]);
+  return tree;
+}
+const buildTree = key => orient(findTpl(key).f());
+
+// 線の端点を親の縁にそろえ直す（ドラッグの後片付け）
+function tidy() {
+  for (const s of G.splits) if (s.seg) { s.node.a = norm(s.seg[0]); s.node.b = norm(s.seg[1]); }
+  computeGeom();
+}
+
+// ===== 画像 =====
+async function loadImage(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const id = 'i' + (++imgSeq);
+  const name = file.name && file.name !== 'image.png' ? file.name : '貼り付け画像';
+  IMGS.set(id, { img, url, name, w: img.naturalWidth, h: img.naturalHeight });
+  return id;
+}
+
+function snapPixel(p) {
+  const im = IMGS.get(p.id);
+  p.x = Math.round(p.x - im.w / 2) + im.w / 2;
+  p.y = Math.round(p.y - im.h / 2) + im.h / 2;
+}
+
+function fitPanel(i, mode) {
+  const p = S.panels[i];
+  if (!p) return;
+  const im = IMGS.get(p.id), bb = G.leaves[i].bb;
+  p.s = mode === 'contain' ? Math.min(bb.w / im.w, bb.h / im.h)
+      : mode === 'actual' ? 1
+      : Math.max(bb.w / im.w, bb.h / im.h);
+  p.x = bb.x + bb.w / 2;
+  p.y = bb.y + bb.h / 2;
+  if (Math.abs(p.s - 1) < 1e-9) { p.s = 1; snapPixel(p); }
+}
+
+function coverScale(i) {
+  const im = IMGS.get(S.panels[i].id), bb = G.leaves[i].bb;
+  return Math.max(bb.w / im.w, bb.h / im.h);
+}
+
+// 背景が出ないように、画像の端がコマの外枠より内側に入らないところで止める（画像がコマより小さい向きは止めない）
+function clampPanel(i) {
+  const p = S.panels[i];
+  if (!S.noGap || !p || p.s == null) return;
+  const im = IMGS.get(p.id), bb = G.leaves[i].bb, w = im.w * p.s, h = im.h * p.s;
+  if (w >= bb.w - 0.01) p.x = Math.min(bb.x + w / 2, Math.max(bb.x + bb.w - w / 2, p.x));
+  if (h >= bb.h - 0.01) p.y = Math.min(bb.y + h / 2, Math.max(bb.y + bb.h - h / 2, p.y));
+}
+
+// 線を動かす前の画像の状態を覚えておく（コマを埋めていた画像は、線を動かしても埋めたままにするため）
+function rememberPanels() {
+  return S.panels.map((p, i) => p && p.s != null ? { x: p.x, y: p.y, s: p.s, covered: p.s >= coverScale(i) - 1e-6 } : null);
+}
+function keepCover(saved) {
+  if (!S.noGap || !saved) return;
+  saved.forEach((o, i) => {
+    const p = S.panels[i];
+    if (!o || !o.covered || !p) return;
+    p.x = o.x; p.y = o.y; p.s = Math.max(o.s, coverScale(i));
+    clampPanel(i);
+  });
+}
+
+function zoomAt(p, m, f, free) {
+  let ns = Math.max(0.01, Math.min(50, p.s * f));
+  if (!free && (p.s - 1) * (ns - 1) < 0) ns = 1;  // 100% を通り過ぎるときは一度止める
+  const k = ns / p.s;
+  p.x = m.x + (p.x - m.x) * k;
+  p.y = m.y + (p.y - m.y) * k;
+  p.s = ns;
+  if (ns === 1) snapPixel(p);
+}
+
+function drawPanelImage(ctx, p) {
+  const im = IMGS.get(p.id);
+  const w = im.w * p.s, h = im.h * p.s;
+  let x = p.x - w / 2, y = p.y - h / 2;
+  if (p.s === 1) { x = Math.round(x); y = Math.round(y); }
+  ctx.drawImage(im.img, x, y, w, h);
+}
+
+// ===== 完成サイズ =====
+function aspectWH() {
+  if (S.aspect === 'free') return [S.W, S.H];
+  const [a, b] = S.aspect.split(':').map(Number);
+  return [a, b];
+}
+
+// どのコマでも画像が縮まない最小のサイズ
+function neededSize() {
+  const [aw, ah] = aspectWH();
+  let need = 0;
+  G.leaves.forEach((l, i) => {
+    const p = S.panels[i];
+    if (!p) return;
+    const im = IMGS.get(p.id), bw = l.bb.w / S.W, bh = l.bb.h / S.H;
+    need = Math.max(need, Math.min(im.w / bw, im.h * aw / (ah * bh)));
+  });
+  if (!need) return null;
+  let W = Math.ceil(need - 1e-6), H = Math.round(W * ah / aw), capped = false;
+  const long = Math.max(W, H);
+  if (long > MAX_SIDE) { const k = MAX_SIDE / long; W = Math.round(W * k); H = Math.round(H * k); capped = true; }
+  return { W, H, capped };
+}
+let sizeCapped = false;
+function applyAutoSize() {
+  const n = neededSize();
+  sizeCapped = !!(n && n.capped);
+  if (n) resizeTo(n.W, n.H);
+}
+
+// サイズを変える。縦横比が同じなら画像と線の太さを同じ割合で拡大縮小、違えば画像をコマに合わせ直す
+function resizeTo(W2, H2) {
+  W2 = Math.max(16, Math.round(W2)); H2 = Math.max(16, Math.round(H2));
+  if (W2 === S.W && H2 === S.H) return;
+  const same = Math.abs(W2 / H2 - S.W / S.H) < 2e-3;
+  const kx = W2 / S.W, ky = H2 / S.H, kl = Math.max(W2, H2) / Math.max(S.W, S.H);
+  S.W = W2; S.H = H2;
+  S.lw = Math.round(S.lw * kl * 10) / 10;
+  computeGeom();
+  S.panels.forEach((p, i) => {
+    if (!p || p.s == null) return;
+    if (same) {
+      p.x *= kx; p.y *= ky; p.s *= kx;
+      if (Math.abs(p.s - 1) < 1e-6) { p.s = 1; snapPixel(p); }
+    } else fitPanel(i, 'cover');
+  });
+  layoutView();
+}
+
+// ===== 描画 =====
+function pathPoly(ctx, poly) {
+  ctx.beginPath();
+  poly.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+  ctx.closePath();
+}
+
+function renderComposition(ctx, editor) {
+  ctx.fillStyle = S.bg;
+  ctx.fillRect(0, 0, S.W, S.H);
+  G.leaves.forEach((l, i) => {
+    const p = S.panels[i];
+    if (p && p.s != null) {
+      ctx.save(); pathPoly(ctx, l.poly); ctx.clip(); drawPanelImage(ctx, p); ctx.restore();
+    } else if (editor) {
+      const px = 1 / vs, c = centroid(l.poly);
+      ctx.save(); pathPoly(ctx, l.poly); ctx.clip();
+      ctx.fillStyle = 'rgba(128,128,128,.13)'; ctx.fillRect(0, 0, S.W, S.H);
+      ctx.fillStyle = '#8b9199'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `700 ${30 * px}px system-ui, sans-serif`;
+      ctx.fillText(String(i + 1), c.x, c.y - 14 * px);
+      ctx.font = `${13 * px}px "Yu Gothic UI", system-ui, sans-serif`;
+      ctx.fillText('画像をドロップ', c.x, c.y + 14 * px);
+      ctx.restore();
+    }
+  });
+  if (S.lw > 0) {
+    ctx.strokeStyle = S.color; ctx.lineWidth = S.lw; ctx.lineCap = 'butt';
+    ctx.beginPath();
+    for (const s of G.splits) if (s.seg) { ctx.moveTo(s.seg[0].x, s.seg[0].y); ctx.lineTo(s.seg[1].x, s.seg[1].y); }
+    ctx.stroke();
+    if (S.frame) ctx.strokeRect(S.lw / 2, S.lw / 2, S.W - S.lw, S.H - S.lw);
+  }
+}
+
+function draw() {
+  const r = dpr(), ctx = vctx, px = 1 / vs;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, view.width, view.height);
+  ctx.setTransform(vs * r, 0, 0, vs * r, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  renderComposition(ctx, true);
+
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#2f6fec';
+  const tint = i => { ctx.save(); pathPoly(ctx, G.leaves[i].poly); ctx.fillStyle = accent; ctx.globalAlpha = .28; ctx.fill(); ctx.restore(); };
+  if (dropIdx >= 0) tint(dropIdx);
+  if (drag && drag.type === 'swap') { tint(drag.from); if (drag.to >= 0 && drag.to !== drag.from) tint(drag.to); }
+
+  // Shiftでまっすぐ動かしている向きのガイド
+  if (drag && drag.type === 'pan' && drag.axis) {
+    const p = S.panels[drag.i];
+    ctx.save(); pathPoly(ctx, G.leaves[drag.i].poly); ctx.clip();
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.5 * px; ctx.setLineDash([6 * px, 5 * px]);
+    ctx.beginPath();
+    if (drag.axis === 'x') { ctx.moveTo(0, p.y); ctx.lineTo(S.W, p.y); } else { ctx.moveTo(p.x, 0); ctx.lineTo(p.x, S.H); }
+    ctx.stroke(); ctx.restore();
+  }
+
+  // コマの選択・ホバー枠
+  const outline = (i, w, dash, alpha) => {
+    ctx.save(); pathPoly(ctx, G.leaves[i].poly); ctx.strokeStyle = accent; ctx.globalAlpha = alpha;
+    ctx.lineWidth = w * px; ctx.setLineDash(dash.map(d => d * px)); ctx.stroke(); ctx.restore();
+  };
+  if (hover && hover.kind === 'panel' && !drag && !(sel && sel.kind === 'panel' && sel.i === hover.i)) outline(hover.i, 1.5, [], .55);
+  if (sel && sel.kind === 'panel' && G.leaves[sel.i]) {
+    outline(sel.i, 2.5, [7, 4], 1);
+    const p = S.panels[sel.i];
+    if (p && p.s != null && !drag) {
+      const c = centroid(G.leaves[sel.i].poly), pct = Math.round(p.s * 1000) / 10;
+      const txt = pct > 100 ? `${pct}%（元より拡大）` : `${pct}%`;
+      ctx.save();
+      ctx.font = `600 ${12 * px}px "Yu Gothic UI", system-ui, sans-serif`;
+      const tw = ctx.measureText(txt).width;
+      ctx.fillStyle = pct > 100 ? 'rgba(194,65,12,.92)' : 'rgba(20,22,26,.78)';
+      ctx.beginPath(); ctx.roundRect(c.x - tw / 2 - 7 * px, c.y - 11 * px, tw + 14 * px, 22 * px, 6 * px); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, c.x, c.y + 0.5 * px);
+      ctx.restore();
+    }
+  }
+
+  // 線のハイライトと端の●
+  const lineOn = i => (hover && (hover.kind === 'line' || hover.kind === 'end') && hover.i === i) ||
+    (sel && sel.kind === 'line' && sel.i === i) || (drag && (drag.type === 'line' || drag.type === 'end') && drag.i === i);
+  G.splits.forEach((s, i) => {
+    if (!s.seg) return;
+    const on = lineOn(i);
+    if (on) {
+      ctx.save(); ctx.strokeStyle = accent; ctx.lineWidth = Math.max(S.lw, 2 * px) + 4 * px; ctx.globalAlpha = .45;
+      ctx.beginPath(); ctx.moveTo(s.seg[0].x, s.seg[0].y); ctx.lineTo(s.seg[1].x, s.seg[1].y); ctx.stroke(); ctx.restore();
+    }
+    if (on || inside) {
+      s.seg.forEach((e, k) => {
+        const big = hover && hover.kind === 'end' && hover.i === i && hover.k === k;
+        ctx.save(); ctx.beginPath(); ctx.arc(e.x, e.y, (big ? 7 : on ? 5.5 : 4) * px, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2 * px; ctx.strokeStyle = accent; ctx.stroke(); ctx.restore();
+      });
+    }
+  });
+}
+
+function layoutView() {
+  const st = $('stage').getBoundingClientRect(), pad = 26;
+  vs = Math.max(0.01, Math.min((st.width - pad * 2) / S.W, (st.height - pad * 2 - 16) / S.H));
+  const w = Math.max(1, Math.round(S.W * vs)), h = Math.max(1, Math.round(S.H * vs));
+  vs = w / S.W;
+  view.style.width = w + 'px'; view.style.height = h + 'px';
+  view.width = Math.round(w * dpr()); view.height = Math.round(h * dpr());
+  $('sizeInfo').textContent = `完成サイズ ${S.W} × ${S.H} px　・　表示 ${Math.round(vs * 100)}%`;
+  draw();
+}
+
+// ===== 元に戻す =====
+let undoStack = [], redoStack = [], lastSnap = null, softTimer = null;
+function snapshot() {
+  const { W, H, aspect, auto, lw, color, bg, frame, tpl, tree, panels } = S;
+  return JSON.stringify({ W, H, aspect, auto, lw, color, bg, frame, tpl, tree, panels });
+}
+function commit() {
+  clearTimeout(softTimer); softTimer = null;
+  const s = snapshot();
+  if (s === lastSnap) return;
+  if (lastSnap) undoStack.push(lastSnap);
+  if (undoStack.length > 200) undoStack.shift();
+  redoStack = [];
+  lastSnap = s;
+  updateUndoButtons();
+  saveSettings();
+}
+function softCommit() { clearTimeout(softTimer); softTimer = setTimeout(commit, 450); }
+function restore(s) {
+  Object.assign(S, JSON.parse(s));
+  sel = null; hover = null;
+  computeGeom(); layoutView(); syncInputs(); refreshSide();
+}
+function undo() {
+  if (softTimer) commit();
+  if (!undoStack.length) return;
+  redoStack.push(lastSnap); lastSnap = undoStack.pop(); restore(lastSnap); updateUndoButtons();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(lastSnap); lastSnap = redoStack.pop(); restore(lastSnap); updateUndoButtons();
+}
+function updateUndoButtons() { $('undoBtn').disabled = !undoStack.length; $('redoBtn').disabled = !redoStack.length; }
+
+// ===== 操作 =====
+function setLayout(key) {
+  const old = S.panels.filter(Boolean);
+  S.tpl = key;
+  S.tree = buildTree(key);
+  computeGeom();
+  const n = G.leaves.length;
+  S.panels = Array.from({ length: n }, (_, i) => old[i] ? { id: old[i].id } : null);
+  if (S.auto) {
+    const ns = neededSize();
+    sizeCapped = !!(ns && ns.capped);
+    if (ns) {
+      // 線の太さは見た目が変わらないよう、サイズと同じ割合で変える（resizeTo と同じ）
+      S.lw = Math.round(S.lw * Math.max(ns.W, ns.H) / Math.max(S.W, S.H) * 10) / 10;
+      S.W = ns.W; S.H = ns.H; computeGeom();
+    }
+  }
+  S.panels.forEach((p, i) => fitPanel(i, 'cover'));
+  sel = null;
+  if (old.length > n) toast(`${old.length - n}枚はコマが足りないので外しました（Ctrl+Zで戻せます）`);
+  layoutView(); syncInputs(); refreshSide(); commit();
+}
+
+function firstEmpty() { const i = S.panels.findIndex(p => !p); return i < 0 ? null : i; }
+
+async function placeFiles(fileList, target) {
+  const files = [...fileList].filter(f => f && /^image\//.test(f.type))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja', { numeric: true }));
+  if (!files.length) { toast('画像ファイルが見つかりませんでした'); return; }
+  const ids = [];
+  for (const f of files) {
+    try { ids.push(await loadImage(f)); } catch (e) { toast(`${f.name} を読み込めませんでした`); }
+  }
+  if (!ids.length) return;
+  const n = S.panels.length;
+  let slots;
+  if (ids.length === 1) {
+    slots = [target ?? firstEmpty() ?? (sel && sel.kind === 'panel' ? sel.i : 0)];
+  } else {
+    // 空いたコマから番号順に。足りなければ落とした場所から順に上書き
+    const empties = [...Array(n).keys()].filter(i => !S.panels[i]);
+    const filled = [];
+    for (let j = 0; j < n; j++) { const i = ((target ?? 0) + j) % n; if (S.panels[i]) filled.push(i); }
+    slots = [...empties, ...filled].slice(0, ids.length);
+    slots = bestOrder(ids.slice(0, slots.length), slots);
+  }
+  slots.forEach((i, j) => { S.panels[i] = { id: ids[j] }; });
+  if (S.auto) applyAutoSize();
+  slots.forEach(i => fitPanel(i, 'cover'));
+  sel = { kind: 'panel', i: slots[0] };
+  layoutView(); syncInputs(); refreshSide(); commit();
+  const over = ids.length - slots.length;
+  if (over > 0) toast(`${over}枚はコマが足りないため入りませんでした`);
+}
+
+// 複数まとめて入れるとき、縦長の画像は縦長のコマへ…と形の合う組み合わせを選ぶ（同じなら名前順のまま）
+function bestOrder(ids, slots) {
+  const cost = (id, i) => {
+    const im = IMGS.get(id), bb = G.leaves[i].bb;
+    return Math.abs(Math.log((im.w / im.h) / (bb.w / bb.h)));
+  };
+  let best = slots, bestCost = ids.reduce((s, id, j) => s + cost(id, slots[j]), 0);
+  if (slots.length > 7) return best;
+  (function perm(cur, rest) {
+    if (!rest.length) {
+      const c = ids.reduce((s, id, j) => s + cost(id, cur[j]), 0);
+      if (c < bestCost - 1e-6) { bestCost = c; best = cur; }
+      return;
+    }
+    rest.forEach((x, k) => perm([...cur, x], rest.filter((_, j) => j !== k)));
+  })([], slots);
+  return best;
+}
+
+function swapPanels(a, b) {
+  if (a === b) return;
+  [S.panels[a], S.panels[b]] = [S.panels[b], S.panels[a]];
+  if (S.auto) applyAutoSize();
+  fitPanel(a, 'cover'); fitPanel(b, 'cover');
+  sel = { kind: 'panel', i: b };
+  layoutView(); syncInputs(); refreshSide(); commit();
+}
+
+function removeImage(i) {
+  if (!S.panels[i]) return;
+  S.panels[i] = null;
+  if (S.auto) applyAutoSize();
+  layoutView(); syncInputs(); refreshSide(); commit();
+}
+
+function straighten(dir) {
+  if (!sel || sel.kind !== 'line') return;
+  const sp = G.splits[sel.i];
+  if (!sp || !sp.seg) return;
+  const m = { x: (sp.seg[0].x + sp.seg[1].x) / 2, y: (sp.seg[0].y + sp.seg[1].y) / 2 };
+  const d0 = sub(sp.b, sp.a);
+  let d = dir === 'v' ? { x: 0, y: 1 } : { x: 1, y: 0 };
+  if (d.x * d0.x + d.y * d0.y < 0) d = { x: -d.x, y: -d.y };
+  const node = sp.node, prev = { a: node.a, b: node.b }, saved = rememberPanels();
+  node.a = norm({ x: m.x - d.x, y: m.y - d.y });
+  node.b = norm({ x: m.x + d.x, y: m.y + d.y });
+  computeGeom();
+  if (!geomValid()) { node.a = prev.a; node.b = prev.b; computeGeom(); toast('この線は今の位置ではそうできません'); return; }
+  tidy(); keepCover(saved); draw(); commit();
+}
+
+// ===== マウス操作 =====
+function toOut(e) {
+  const r = view.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / vs, y: (e.clientY - r.top) / vs };
+}
+function panelAt(m) { return G.leaves.findIndex(l => pointInPoly(m, l.poly)); }
+
+function hitTest(m) {
+  const r = 9 / vs;
+  const order = [...G.splits.keys()];
+  if (sel && sel.kind === 'line') order.unshift(sel.i);
+  for (const i of order) {
+    const s = G.splits[i];
+    if (s && s.seg) for (const k of [0, 1]) if (dist(m, s.seg[k]) <= r) return { kind: 'end', i, k };
+  }
+  const lr = Math.max(6 / vs, S.lw / 2 + 3 / vs);
+  for (const i of order) {
+    const s = G.splits[i];
+    if (s && s.seg && distToSeg(m, s.seg[0], s.seg[1]) <= lr) return { kind: 'line', i };
+  }
+  const i = panelAt(m);
+  return i >= 0 ? { kind: 'panel', i } : null;
+}
+
+function setCursor(h, e) {
+  let c = 'default';
+  if (drag) c = drag.type === 'pan' ? 'grabbing' : drag.type === 'swap' ? 'copy' : view.style.cursor;
+  else if (h && h.kind === 'end') c = 'grab';
+  else if (h && h.kind === 'line') {
+    const s = G.splits[h.i], d = sub(s.seg[1], s.seg[0]);
+    c = Math.abs(d.x) < Math.abs(d.y) * 0.3 ? 'ew-resize' : Math.abs(d.y) < Math.abs(d.x) * 0.3 ? 'ns-resize' : 'move';
+  } else if (h && h.kind === 'panel' && S.panels[h.i]) c = e && (e.ctrlKey || e.metaKey) ? 'copy' : 'grab';
+  view.style.cursor = c;
+}
+
+function startLineDrag(i, m, shift) {
+  const sp = G.splits[i];
+  const group = [sp];
+  if (!shift) {
+    // 一直線につながっている線（2×2の縦線など）は一緒に動かす
+    const eps = 1e-3 * (S.W + S.H);
+    G.splits.forEach(o => {
+      if (o !== sp && o.seg && distToLine(sp.a, sp.b, o.a) < eps && distToLine(sp.a, sp.b, o.b) < eps) group.push(o);
+    });
+  }
+  const d = sub(sp.b, sp.a), len = Math.hypot(d.x, d.y);
+  drag = {
+    type: 'line', i, start: m, moved: false,
+    dir: { x: d.x / len, y: d.y / len },
+    mid0: { x: (sp.seg[0].x + sp.seg[1].x) / 2, y: (sp.seg[0].y + sp.seg[1].y) / 2 },
+    items: group.map(o => ({ node: o.node, a: { ...o.a }, b: { ...o.b } })),
+    saved: rememberPanels(),
+  };
+}
+function moveLine(m, shift) {
+  const d = sub(m, drag.start);
+  if (!shift) {
+    const thr = 8 / vs, mid = { x: drag.mid0.x + d.x, y: drag.mid0.y + d.y };
+    if (Math.abs(drag.dir.x) < 0.03) { const c = nearest(mid.x, FRACS.map(f => f * S.W), thr); if (c !== null) d.x += c - mid.x; }
+    if (Math.abs(drag.dir.y) < 0.03) { const c = nearest(mid.y, FRACS.map(f => f * S.H), thr); if (c !== null) d.y += c - mid.y; }
+  }
+  const prev = drag.items.map(it => ({ a: it.node.a, b: it.node.b }));
+  for (const it of drag.items) {
+    it.node.a = norm({ x: it.a.x + d.x, y: it.a.y + d.y });
+    it.node.b = norm({ x: it.b.x + d.x, y: it.b.y + d.y });
+  }
+  computeGeom();
+  if (!geomValid()) { drag.items.forEach((it, j) => { it.node.a = prev[j].a; it.node.b = prev[j].b; }); computeGeom(); }
+  keepCover(drag.saved);
+}
+
+function startEndDrag(i, k) {
+  const sp = G.splits[i];
+  drag = {
+    type: 'end', i, k, node: sp.node, parent: sp.parent, other: { ...sp.seg[1 - k] },
+    c0: centroid(clipHalf(sp.parent, sp.a, sp.b, 1)),
+    saved: rememberPanels(),
+  };
+}
+function moveEnd(m, shift) {
+  const hit = closestOnBoundary(drag.parent, m);
+  if (!hit) return;
+  const pt = { ...hit.pt }, o = drag.other, ed = hit.ed;
+  if (!shift) {
+    const thr = 8 / vs;
+    if (Math.abs(ed.x) > Math.abs(ed.y) * 3) { const c = nearest(pt.x, [o.x, ...FRACS.map(f => f * S.W)], thr); if (c !== null) pt.x = c; }
+    else if (Math.abs(ed.y) > Math.abs(ed.x) * 3) { const c = nearest(pt.y, [o.y, ...FRACS.map(f => f * S.H)], thr); if (c !== null) pt.y = c; }
+  }
+  if (dist(pt, o) < 20 / vs) return;
+  let a = drag.k === 0 ? pt : o, b = drag.k === 0 ? o : pt;
+  if (side(a, b, drag.c0) < 0) [a, b] = [b, a];  // コマの左右が入れ替わらないように
+  const node = drag.node, prev = { a: node.a, b: node.b };
+  node.a = norm(a); node.b = norm(b);
+  computeGeom();
+  if (!geomValid()) { node.a = prev.a; node.b = prev.b; computeGeom(); }
+  keepCover(drag.saved);
+}
+
+view.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  if (softTimer) commit();  // ホイール操作の直後でも、戻すときは別々の1手にする
+  const m = toOut(e), h = hitTest(m);
+  view.setPointerCapture(e.pointerId);
+  if (!h) { sel = null; }
+  else if (h.kind === 'end') { sel = { kind: 'line', i: h.i }; startEndDrag(h.i, h.k); }
+  else if (h.kind === 'line') { sel = { kind: 'line', i: h.i }; startLineDrag(h.i, m, e.shiftKey); }
+  else {
+    sel = { kind: 'panel', i: h.i };
+    const p = S.panels[h.i];
+    if (p) drag = (e.ctrlKey || e.metaKey) ? { type: 'swap', from: h.i, to: h.i } : { type: 'pan', i: h.i, start: m, ox: p.x, oy: p.y, axis: null };
+  }
+  setCursor(h, e); refreshSide(); draw();
+});
+
+view.addEventListener('pointermove', e => {
+  const m = toOut(e);
+  inside = true;
+  if (drag) {
+    if (drag.type === 'pan') {
+      const p = S.panels[drag.i];
+      let dx = m.x - drag.start.x, dy = m.y - drag.start.y;
+      if (e.shiftKey) {
+        // Shift中は、最初に大きく動いた向き（横か縦）だけに動かす
+        if (!drag.axis && Math.hypot(dx, dy) > 6 / vs) drag.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+        if (drag.axis !== 'x') dx = 0;
+        if (drag.axis !== 'y') dy = 0;
+      } else drag.axis = null;
+      p.x = drag.ox + dx; p.y = drag.oy + dy;
+      clampPanel(drag.i);
+    } else if (drag.type === 'swap') drag.to = panelAt(m);
+    else if (drag.type === 'line') moveLine(m, e.shiftKey);
+    else if (drag.type === 'end') moveEnd(m, e.shiftKey);
+    draw();
+    return;
+  }
+  const h = hitTest(m);
+  if (JSON.stringify(h) !== JSON.stringify(hover)) { hover = h; draw(); }
+  setCursor(h, e);
+});
+
+function endDrag() {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  if (d.type === 'swap') { if (d.to >= 0 && d.to !== d.from) { swapPanels(d.from, d.to); return; } }
+  if (d.type === 'line' || d.type === 'end') { tidy(); S.panels.forEach((p, i) => clampPanel(i)); }
+  if (d.type === 'pan') { const p = S.panels[d.i]; if (p && p.s === 1) snapPixel(p); clampPanel(d.i); }
+  draw(); commit(); refreshSide();
+}
+view.addEventListener('pointerup', endDrag);
+view.addEventListener('pointercancel', endDrag);
+view.addEventListener('pointerleave', () => { inside = false; if (!drag) { hover = null; draw(); } });
+
+view.addEventListener('dblclick', e => {
+  const i = panelAt(toOut(e));
+  if (i >= 0 && S.panels[i]) { fitPanel(i, 'cover'); draw(); refreshSide(); commit(); }
+});
+
+view.addEventListener('wheel', e => {
+  e.preventDefault();
+  const m = toOut(e), i = panelAt(m);
+  if (i < 0 || !S.panels[i]) return;
+  const delta = e.deltaY || e.deltaX, p = S.panels[i], before = p.s, cov = coverScale(i);
+  zoomAt(p, m, Math.pow(1.0015, -delta * (e.shiftKey ? 0.15 : 1)), e.shiftKey);
+  // 背景を出さない設定なら、コマをちょうど埋める大きさより小さくしない
+  if (S.noGap && before >= cov - 1e-9 && p.s < cov) zoomAt(p, m, cov / p.s, true);
+  clampPanel(i);
+  sel = { kind: 'panel', i };
+  draw(); refreshSide(); softCommit();
+}, { passive: false });
+
+// ===== ファイルのドロップ・貼り付け =====
+const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+const stage = $('stage');
+let dragDepth = 0;
+stage.addEventListener('dragenter', e => { if (hasFiles(e)) { dragDepth++; stage.classList.add('dragging'); } });
+stage.addEventListener('dragleave', e => {
+  if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; stage.classList.remove('dragging'); dropIdx = -1; draw(); }
+});
+stage.addEventListener('dragover', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  const i = panelAt(toOut(e));
+  if (i !== dropIdx) { dropIdx = i; draw(); }
+});
+stage.addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); e.stopPropagation();
+  const target = dropIdx >= 0 ? dropIdx : null;
+  dragDepth = 0; stage.classList.remove('dragging'); dropIdx = -1;
+  placeFiles(e.dataTransfer.files, target);
+});
+// 画面のほかの場所に落としてもブラウザが画像を開かないように
+window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('drop', e => { if (hasFiles(e)) { e.preventDefault(); placeFiles(e.dataTransfer.files, null); } });
+
+document.addEventListener('paste', e => {
+  const files = [...(e.clipboardData ? e.clipboardData.items : [])]
+    .filter(it => it.kind === 'file' && it.type.startsWith('image/')).map(it => it.getAsFile());
+  if (!files.length) return;
+  e.preventDefault();
+  placeFiles(files, sel && sel.kind === 'panel' ? sel.i : null);
+});
+
+let openTarget = null;
+$('openBtn').onclick = () => { openTarget = null; $('fileInput').click(); };
+$('openHere').onclick = () => { openTarget = sel && sel.kind === 'panel' ? sel.i : null; $('fileInput').click(); };
+$('fileInput').onchange = e => { placeFiles(e.target.files, openTarget); e.target.value = ''; };
+
+// ===== 書き出し =====
+function renderFull() {
+  const c = document.createElement('canvas');
+  c.width = S.W; c.height = S.H;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  renderComposition(ctx, false);
+  return c;
+}
+const toBlob = c => new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('画像を作れませんでした')), 'image/png'));
+function stamp() {
+  const d = new Date(), z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
+}
+
+async function savePNG() {
+  toast('書き出し中…');
+  const name = `コマ割り_${stamp()}.png`;
+  if (window.showSaveFilePicker) {
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({ id: 'koma', suggestedName: name, types: [{ description: 'PNG画像', accept: { 'image/png': ['.png'] } }] });
+    } catch (e) {
+      if (e.name === 'AbortError') { toast('保存をやめました'); return; }
+      handle = null;
+    }
+    if (handle) {
+      const w = await handle.createWritable();
+      await w.write(await toBlob(renderFull()));
+      await w.close();
+      toast(`保存しました：${handle.name}（${S.W}×${S.H}）`);
+      return;
+    }
+  }
+  const blob = await toBlob(renderFull());
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast(`ダウンロードフォルダに保存しました：${name}`);
+}
+
+async function copyPNG() {
+  if (!navigator.clipboard || !window.ClipboardItem) { toast('このブラウザではコピーが使えません。「PNGで保存」を使ってください'); return; }
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': toBlob(renderFull()) })]);
+    toast(`クリップボードにコピーしました（${S.W}×${S.H}）`);
+  } catch (e) {
+    toast('コピーできませんでした：' + e.message);
+  }
+}
+$('saveBtn').onclick = savePNG;
+$('copyBtn').onclick = copyPNG;
+$('undoBtn').onclick = undo;
+$('redoBtn').onclick = redo;
+
+// ===== キーボード =====
+document.addEventListener('keydown', e => {
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'range' && document.activeElement.type !== 'checkbox';
+  const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (ctrl && key === 's') { e.preventDefault(); savePNG(); return; }
+  if (typing) return;
+  if (ctrl && key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if (ctrl && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+  else if (ctrl && key === 'c' && !String(window.getSelection())) { e.preventDefault(); copyPNG(); }
+  else if (key === 'escape') { sel = null; refreshSide(); draw(); }
+  else if ((key === 'delete' || key === 'backspace') && sel && sel.kind === 'panel') { e.preventDefault(); removeImage(sel.i); }
+  else if (key.startsWith('arrow') && sel && sel.kind === 'panel' && S.panels[sel.i]) {
+    e.preventDefault();
+    const p = S.panels[sel.i], st = e.shiftKey ? 10 : 1;
+    if (key === 'arrowleft') p.x -= st; if (key === 'arrowright') p.x += st;
+    if (key === 'arrowup') p.y -= st; if (key === 'arrowdown') p.y += st;
+    clampPanel(sel.i);
+    draw(); softCommit();
+  }
+});
+document.addEventListener('keyup', () => { if (!drag) setCursor(hover); });
+
+// ===== サイドバー =====
+function syncInputs() {
+  $('aspect').value = S.aspect;
+  $('autoChk').checked = S.auto;
+  $('wNum').value = S.W; $('hNum').value = S.H;
+  $('lwRange').value = Math.min(60, S.lw); $('lwNum').value = S.lw;
+  $('lineColor').value = S.color; $('bgColor').value = S.bg;
+  $('frameChk').checked = S.frame;
+  $('noGapChk').checked = S.noGap;
+  $('sizeNote').innerHTML = S.auto
+    ? (sizeCapped ? `<span class="warn">上限の${MAX_SIDE}pxで止めました。一部の画像は縮みます。</span>` : 'どのコマでも元画像が縮まない大きさにします。')
+    : '手で決めたサイズです。自動に戻すと元画像に合わせます。';
+  const count = countOf(S.tpl);
+  document.querySelectorAll('#counts button').forEach(b => b.classList.toggle('on', +b.dataset.c === count));
+  renderTplIcons(count);
+  updateUndoButtons();
+}
+
+function refreshSide() {
+  const isPanel = sel && sel.kind === 'panel' && G.leaves[sel.i];
+  $('panelTools').classList.toggle('hidden', !isPanel);
+  $('lineTools').classList.toggle('hidden', !(sel && sel.kind === 'line'));
+  if (isPanel) {
+    const p = S.panels[sel.i], im = p && IMGS.get(p.id);
+    $('panelTitle').textContent = `コマ ${sel.i + 1}` + (im ? `：${im.name}` : '（空き）');
+    document.querySelectorAll('#panelTools button[data-fit], #removeHere, #zoomRange, #zoomNum').forEach(el => el.disabled = !p);
+    if (p) {
+      const pct = Math.round(p.s * 1000) / 10;
+      $('zoomRange').value = Math.log2(p.s);
+      $('zoomNum').value = pct;
+      $('zoomNote').innerHTML = `元画像 ${im.w}×${im.h}　→　表示 ${Math.round(im.w * p.s)}×${Math.round(im.h * p.s)}<br>` +
+        (pct > 100.05 ? '<span class="warn">元より拡大しているので少しぼやけます</span>' : pct === 100 ? '100%：元画像のピクセルそのまま' : '元画像より縮小（画質は保たれます）');
+    } else $('zoomNote').textContent = '画像をドロップするか「このコマに画像を開く」で入れます。';
+  }
+  renderList();
+}
+
+function renderList() {
+  const ul = $('list');
+  ul.innerHTML = '';
+  S.panels.forEach((p, i) => {
+    const im = p && IMGS.get(p.id);
+    const li = document.createElement('li');
+    li.draggable = !!p;
+    if (sel && sel.kind === 'panel' && sel.i === i) li.classList.add('sel');
+    const pct = p ? Math.round(p.s * 1000) / 10 : 0;
+    li.innerHTML = `<span class="num">${i + 1}</span>` +
+      (im ? `<img class="thumb" draggable="false" src="${im.url}">` : '<span class="thumb"></span>') +
+      `<div class="meta"><div class="name"></div><div class="sub">${im ? `${im.w}×${im.h}　<span class="${pct > 100.05 ? 'warn' : ''}">${pct}%</span>` : '空き'}</div></div>` +
+      (p ? '<button class="x" title="画像を外す">×</button>' : '');
+    li.querySelector('.name').textContent = im ? im.name : '（画像なし）';
+    li.onclick = ev => {
+      if (ev.target.classList.contains('x')) { removeImage(i); return; }
+      sel = { kind: 'panel', i }; refreshSide(); draw();
+    };
+    li.addEventListener('dragstart', ev => { ev.dataTransfer.setData('application/x-koma', String(i)); ev.dataTransfer.effectAllowed = 'move'; });
+    li.addEventListener('dragover', ev => {
+      const t = [...ev.dataTransfer.types];
+      if (t.includes('application/x-koma') || t.includes('Files')) { ev.preventDefault(); li.classList.add('over'); }
+    });
+    li.addEventListener('dragleave', () => li.classList.remove('over'));
+    li.addEventListener('drop', ev => {
+      ev.preventDefault(); ev.stopPropagation(); li.classList.remove('over');
+      if (ev.dataTransfer.files.length) { placeFiles(ev.dataTransfer.files, i); return; }
+      const from = +ev.dataTransfer.getData('application/x-koma');
+      if (!Number.isNaN(from)) swapPanels(from, i);
+    });
+    ul.appendChild(li);
+  });
+}
+
+function drawIcon(cv, key) {
+  const r = dpr(), size = 40;
+  cv.width = size * r; cv.height = size * r;
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+  const css = getComputedStyle(document.documentElement);
+  ctx.fillStyle = css.getPropertyValue('--panel').trim();
+  ctx.fillRect(0, 0, size, size);
+  const g = geomOf(buildTree(key), size, size);
+  ctx.strokeStyle = css.getPropertyValue('--text').trim(); ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (const s of g.splits) if (s.seg) { ctx.moveTo(s.seg[0].x, s.seg[0].y); ctx.lineTo(s.seg[1].x, s.seg[1].y); }
+  ctx.stroke();
+  ctx.strokeRect(0.8, 0.8, size - 1.6, size - 1.6);
+}
+function renderTplIcons(count) {
+  const box = $('tpls');
+  box.innerHTML = '';
+  for (const t of TEMPLATES[count]) {
+    const b = document.createElement('button');
+    b.className = 'tpl' + (t.k === S.tpl ? ' on' : '');
+    b.title = t.n;
+    const cv = document.createElement('canvas');
+    b.appendChild(cv);
+    drawIcon(cv, t.k);
+    b.onclick = () => setLayout(t.k);
+    box.appendChild(b);
+  }
+}
+
+// 設定欄
+for (const c of Object.keys(TEMPLATES)) {
+  const b = document.createElement('button');
+  b.textContent = c; b.dataset.c = c; b.title = `${c}コマ`;
+  b.onclick = () => setLayout(TEMPLATES[c][0].k);
+  $('counts').appendChild(b);
+}
+$('lineColor').oninput = e => { S.color = e.target.value; draw(); };
+$('lineColor').onchange = commit;
+document.querySelectorAll('.sw').forEach(b => b.onclick = () => { S.color = b.dataset.color; syncInputs(); draw(); commit(); });
+$('lwRange').oninput = e => { S.lw = +e.target.value; $('lwNum').value = S.lw; draw(); };
+$('lwRange').onchange = commit;
+$('lwNum').onchange = e => { S.lw = Math.max(0, +e.target.value || 0); syncInputs(); draw(); commit(); };
+$('frameChk').onchange = e => { S.frame = e.target.checked; draw(); commit(); };
+$('noGapChk').onchange = e => {
+  S.noGap = e.target.checked; saveSettings();
+  if (S.noGap) { S.panels.forEach((p, i) => clampPanel(i)); draw(); commit(); }
+};
+$('bgColor').oninput = e => { S.bg = e.target.value; draw(); };
+$('bgColor').onchange = commit;
+
+$('aspect').onchange = e => {
+  S.aspect = e.target.value;
+  if (S.aspect !== 'free') {
+    const [aw, ah] = aspectWH(), long = Math.max(S.W, S.H);
+    if (S.auto && neededSize()) applyAutoSize();
+    else resizeTo(aw >= ah ? long : long * aw / ah, aw >= ah ? long * ah / aw : long);
+  }
+  syncInputs(); refreshSide(); commit();
+};
+$('autoChk').onchange = e => {
+  S.auto = e.target.checked;
+  if (S.auto) applyAutoSize();
+  syncInputs(); refreshSide(); commit();
+};
+function manualSize(which) {
+  let W = Math.min(MAX_SIDE, Math.max(16, +$('wNum').value || S.W));
+  let H = Math.min(MAX_SIDE, Math.max(16, +$('hNum').value || S.H));
+  if (S.aspect !== 'free') {
+    const [aw, ah] = aspectWH();
+    if (which === 'w') H = Math.round(W * ah / aw); else W = Math.round(H * aw / ah);
+  }
+  S.auto = false; sizeCapped = false;
+  resizeTo(W, H);
+  syncInputs(); refreshSide(); commit();
+}
+$('wNum').onchange = () => manualSize('w');
+$('hNum').onchange = () => manualSize('h');
+
+// 選んだコマの操作
+document.querySelectorAll('#panelTools button[data-fit]').forEach(b => b.onclick = () => {
+  if (!sel || sel.kind !== 'panel') return;
+  fitPanel(sel.i, b.dataset.fit); draw(); refreshSide(); commit();
+});
+function setZoom(s) {
+  if (!sel || sel.kind !== 'panel' || !S.panels[sel.i]) return;
+  const p = S.panels[sel.i];
+  zoomAt(p, { x: p.x, y: p.y }, s / p.s, true);
+  if (Math.abs(p.s - 1) < 1e-6) { p.s = 1; snapPixel(p); }
+  clampPanel(sel.i);
+  draw();
+}
+$('zoomRange').oninput = e => { setZoom(Math.pow(2, +e.target.value)); $('zoomNum').value = Math.round(S.panels[sel.i].s * 1000) / 10; };
+$('zoomRange').onchange = () => { refreshSide(); commit(); };
+$('zoomNum').onchange = e => { setZoom(Math.max(1, +e.target.value || 100) / 100); refreshSide(); commit(); };
+$('removeHere').onclick = () => { if (sel && sel.kind === 'panel') removeImage(sel.i); };
+$('vertBtn').onclick = () => straighten('v');
+$('horzBtn').onclick = () => straighten('h');
+$('clearBtn').onclick = () => {
+  if (!S.panels.some(Boolean)) return;
+  S.panels = S.panels.map(() => null);
+  layoutView(); syncInputs(); refreshSide(); commit();
+  toast('全部外しました（Ctrl+Zで戻せます）');
+};
+
+// ===== 小物 =====
+let toastTimer = null;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// 線の色・太さ・縦横比・型は次に開いたときも同じにする（このブラウザの中だけ）
+function saveSettings() {
+  try {
+    localStorage.setItem('koma-settings', JSON.stringify({
+      color: S.color, bg: S.bg, frame: S.frame, noGap: S.noGap, aspect: S.aspect, tpl: S.tpl,
+      lwRel: S.lw / Math.max(S.W, S.H),
+    }));
+  } catch (e) { /* 保存できなくても動く */ }
+}
+function loadSettings() {
+  try {
+    const o = JSON.parse(localStorage.getItem('koma-settings') || 'null');
+    if (!o) return;
+    if (o.color) S.color = o.color;
+    if (o.bg) S.bg = o.bg;
+    S.frame = !!o.frame;
+    if (typeof o.noGap === 'boolean') S.noGap = o.noGap;
+    if (o.aspect && $('aspect').querySelector(`option[value="${o.aspect}"]`)) S.aspect = o.aspect;
+    if (o.tpl && findTpl(o.tpl)) S.tpl = o.tpl;
+    if (o.lwRel >= 0) S.lw = Math.round(o.lwRel * 2048 * 10) / 10;
+  } catch (e) { /* 壊れていたら初期値のまま */ }
+}
+
+// ===== 起動 =====
+// サイトで開いたときだけ「オフライン用に保存」を出す（保存したファイルを開いたときは不要）
+if (/^https?:$/.test(location.protocol)) {
+  $('dlBtn').href = location.href.split(/[?#]/)[0];
+  $('dlBtn').classList.remove('hidden');
+}
+loadSettings();
+if (S.aspect !== 'free') { const [aw, ah] = aspectWH(); S.W = aw >= ah ? 2048 : Math.round(2048 * aw / ah); S.H = aw >= ah ? Math.round(2048 * ah / aw) : 2048; }
+S.tree = buildTree(S.tpl);
+computeGeom();
+S.panels = G.leaves.map(() => null);
+syncInputs(); refreshSide();
+new ResizeObserver(layoutView).observe(stage);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { renderTplIcons(countOf(S.tpl)); draw(); });
+commit();
+</script>
+</body>
+</html>
