@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>コマ割りツール</title>
 <meta name="description" content="画像を元の画質のまま1枚にまとめるコマ割りツール。ドラッグ＆ドロップで並べて、線の位置・傾き・色・太さも自由。ブラウザだけで動き、画像は外に送られません。">
 <meta property="og:type" content="website">
@@ -25,7 +25,11 @@
   }
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body {
+  height: 100%; margin: 0; max-width: 100%;
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
 body {
   background: var(--bg); color: var(--text);
   font: 13px/1.5 "Yu Gothic UI", "Meiryo UI", "Hiragino Sans", system-ui, sans-serif;
@@ -130,6 +134,48 @@ input[type=checkbox] { accent-color: var(--accent); }
   font-size: 13px; pointer-events: none; opacity: 0; transition: opacity .2s; max-width: 80vw;
 }
 #toast.show { opacity: 1; }
+
+.tool-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-buttons button { width: auto; flex: 0 0 auto; }
+.tool-buttons button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.field-stack { display: grid; gap: 5px; width: 100%; }
+.field-stack textarea, .field-stack input[type=text] {
+  width: 100%; min-width: 0; font: inherit; color: var(--text); background: var(--btn);
+  border: 1px solid var(--border); border-radius: 5px; padding: 6px 7px; resize: vertical;
+}
+.field-stack textarea { min-height: 54px; }
+#overlayList { list-style: none; margin: 7px 0 0; padding: 0; display: grid; gap: 4px; }
+#overlayList li { display: flex; align-items: center; gap: 5px; min-width: 0; }
+#overlayList .layer-main {
+  min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: left;
+}
+#overlayList .layer-main.on { background: var(--accent-weak); border-color: var(--accent); color: var(--text); }
+#overlayList .layer-icon { width: 31px; padding: 4px 0; flex: 0 0 auto; }
+#overlaySelection[hidden], #effectFields[hidden], #textFields[hidden], #shapeFields[hidden] { display: none !important; }
+#recoveryStatus { min-width: 9em; }
+#view.overlay-tool { cursor: crosshair !important; }
+
+@media (max-width: 760px) {
+  html, body { height: auto; min-height: 100%; overflow-x: hidden; }
+  body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(330px, 52svh) auto auto;
+    grid-template-areas: "top" "stage" "hint" "side";
+    overflow-y: auto;
+  }
+  header { gap: 8px; padding: 8px 10px; }
+  header .spacer { display: none; }
+  header > .group { flex-wrap: wrap; min-width: 0; }
+  header h1 { width: 100%; font-size: 16px; }
+  #stage { min-width: 0; min-height: 330px; }
+  #hint { padding: 7px 10px; line-height: 1.7; }
+  aside { border-left: 0; border-top: 1px solid var(--border); overflow: visible; padding: 0 12px 24px; }
+  .row { min-width: 0; }
+  .row input, .row select { max-width: 100%; min-width: 0; }
+  .row input[type=range] { flex: 1 1 130px; }
+  .tool-buttons button { min-height: 36px; }
+  #toast { bottom: max(18px, env(safe-area-inset-bottom)); }
+}
 </style>
 </head>
 <body>
@@ -155,7 +201,7 @@ input[type=checkbox] { accent-color: var(--accent); }
 </main>
 
 <div id="hint">
-  <b>ドロップ</b> 画像をコマへ（複数まとめてOK）　<b>ドラッグ</b> 画像を動かす（Shiftで横か縦にまっすぐ）<b>ホイール</b> 拡大縮小（Shiftで細かく）　<b>ダブルクリック</b> コマに合わせ直す　<b>Ctrl+ドラッグ</b> コマの入れ替え　<b>線をドラッグ</b> 線を動かす・端の●で傾ける（Shiftで吸着なし）　<b>Ctrl+V</b> 貼り付け　<b>Ctrl+C</b> コピー　<b>Ctrl+Z</b> 戻す
+  <b>ドロップ</b> 画像をコマへ(複数まとめてOK)　<b>ドラッグ</b> 画像を動かす(Shiftで横か縦にまっすぐ)　<b>ホイール</b> 拡大縮小(Shiftで細かく)　<b>ダブルクリック</b> コマに合わせ直す　<b>Ctrl+ドラッグ</b> コマの入れ替え　<b>線をドラッグ</b> 線を動かす・端の●で傾ける(Shiftで吸着なし)　<b>Ctrl+V</b> 貼り付け　<b>Ctrl+C</b> コピー　<b>Ctrl+Z</b> 戻す
 </div>
 
 <aside>
@@ -169,10 +215,10 @@ input[type=checkbox] { accent-color: var(--accent); }
     <div class="row">
       <button data-fit="cover" title="コマ全体を埋める">埋める</button>
       <button data-fit="contain" title="画像全体が見えるように">全体を入れる</button>
-      <button data-fit="actual" title="元画像のピクセルそのまま">100%（等倍）</button>
+      <button data-fit="actual" title="元画像のピクセルそのまま">100%(等倍)</button>
     </div>
     <div class="row"><label><input type="checkbox" id="noGapChk"> 背景が出ないように端で止める</label></div>
-    <p class="note">Shift＋ドラッグで横か縦にまっすぐ動かせます。矢印キーでも1px（Shiftで10px）ずつ動きます。</p>
+    <p class="note">Shift＋ドラッグで横か縦にまっすぐ動かせます。矢印キーでも1px(Shiftで10px)ずつ動きます。</p>
     <div class="row">
       <button id="openHere">このコマに画像を開く…</button>
       <button id="removeHere">画像を外す</button>
@@ -185,7 +231,60 @@ input[type=checkbox] { accent-color: var(--accent); }
       <button id="vertBtn">垂直にする</button>
       <button id="horzBtn">水平にする</button>
     </div>
-    <p class="note">線の真ん中をドラッグで平行移動、端の●をドラッグで傾きを変えます。一直線につながった線は一緒に動きます（Shiftを押しながらで別々に）。</p>
+    <p class="note">線の真ん中をドラッグで平行移動、端の●をドラッグで傾きを変えます。一直線につながった線は一緒に動きます(Shiftを押しながらで別々に)。</p>
+  </section>
+
+  <section>
+    <h2>吹き出し・文字・図形</h2>
+    <div class="tool-buttons">
+      <button data-add-overlay="bubble-oval">吹き出し</button>
+      <button data-add-overlay="bubble-round">角丸吹き出し</button>
+      <button data-add-overlay="bubble-burst">強調吹き出し</button>
+      <button data-add-overlay="text">文字</button>
+      <button data-add-overlay="rect">四角</button>
+      <button data-add-overlay="ellipse">楕円</button>
+      <button data-add-overlay="line">直線</button>
+    </div>
+    <p class="note">追加後はキャンバス上で移動。右下の四角で拡大縮小できます。</p>
+  </section>
+
+  <section>
+    <h2>画像を隠す・加工する</h2>
+    <div class="tool-buttons" id="effectTools">
+      <button data-overlay-tool="mosaic">モザイク範囲</button>
+      <button data-overlay-tool="blur">ぼかし範囲</button>
+      <button data-overlay-tool="patch">スポイトで隠す</button>
+      <button id="toolCancel" class="hidden">範囲指定を終了</button>
+    </div>
+    <p class="note" id="toolNote">ボタンを押し、キャンバス上をドラッグして範囲を作ります。</p>
+  </section>
+
+  <section id="overlaySelection" hidden>
+    <h2 id="overlayTitle">選んだ素材</h2>
+    <div id="textFields" class="field-stack" hidden>
+      <label>文字<textarea id="overlayText" rows="2"></textarea></label>
+      <div class="row"><label><input type="checkbox" id="overlayVertical"> 縦書き</label></div>
+      <div class="row"><span class="label">文字色</span><input type="color" id="overlayTextColor"><span class="label">大きさ</span><input type="number" id="overlayFontSize" min="8" max="500" step="1">px</div>
+    </div>
+    <div id="shapeFields" hidden>
+      <div class="row"><span class="label">内側</span><input type="color" id="overlayFill"><span class="label">枠</span><input type="color" id="overlayStroke"></div>
+      <div class="row"><span class="label">枠幅</span><input type="number" id="overlayStrokeWidth" min="0" max="200" step="1">px</div>
+    </div>
+    <div id="effectFields" hidden>
+      <div class="row"><span class="label">強さ</span><input type="range" id="overlayStrength" min="4" max="48" step="1"><span id="overlayStrengthValue"></span></div>
+    </div>
+    <div class="row"><label><input type="checkbox" id="overlayVisible"> 表示</label><label><input type="checkbox" id="overlayLocked"> 固定</label></div>
+    <div class="tool-buttons">
+      <button id="overlayBack">背面へ</button>
+      <button id="overlayFront">前面へ</button>
+      <button id="overlayDelete">削除</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>追加素材のレイヤー</h2>
+    <ul id="overlayList"></ul>
+    <p class="note" id="overlayEmpty">追加素材はありません。</p>
   </section>
 
   <section>
@@ -219,6 +318,7 @@ input[type=checkbox] { accent-color: var(--accent); }
       </select>
     </div>
     <div class="row"><label><input type="checkbox" id="autoChk"> 元画像に合わせて自動</label></div>
+    <div class="row"><button id="shortsBtn">Shorts 1080×1920</button></div>
     <div class="row"><span class="label">幅×高さ</span>
       <input type="number" id="wNum" min="16" max="8192"> × <input type="number" id="hNum" min="16" max="8192"> px
     </div>
@@ -226,9 +326,15 @@ input[type=checkbox] { accent-color: var(--accent); }
   </section>
 
   <section>
-    <h2>コマ一覧 <span style="font-weight:400">（ドラッグで入れ替え）</span></h2>
+    <h2>コマ一覧 <span style="font-weight:400">(ドラッグで入れ替え)</span></h2>
     <ul id="list"></ul>
     <div class="row"><button id="clearBtn">全部の画像を外す</button></div>
+  </section>
+
+  <section>
+    <h2>作業の復旧</h2>
+    <div class="row"><span class="note" id="recoveryStatus">自動保存を確認中...</span><button id="recoverBtn" class="hidden">前回の作業を復旧</button></div>
+    <p class="note">画像を含む作業状態をこの端末内だけに自動保存します。</p>
   </section>
 </aside>
 
@@ -246,6 +352,7 @@ const S = {
   noGap: true,  // 画像を動かしても背景が出ないように止める（好みの設定なので元に戻すの対象外）
   tpl: '2v', tree: null,
   panels: [],  // コマ番号順。null か {id, x, y, s}（x,y=画像中心の出力px、s=出力px/元画像px）
+  overlays: [],  // 吹き出し、文字、図形、モザイクなど。座標は完成画像px
 };
 const IMGS = new Map();  // id -> {img, url, name, w, h}
 let imgSeq = 0;
@@ -256,6 +363,11 @@ let drag = null;
 let dropIdx = -1;
 let inside = false;
 let vs = 1;         // 表示倍率（画面px / 出力px）
+let overlaySeq = 0;
+let overlayTool = null;
+let toolDraft = null;
+const touchPointers = new Map();
+let pinch = null;
 
 const $ = id => document.getElementById(id);
 const view = $('view'), vctx = view.getContext('2d');
@@ -450,13 +562,18 @@ function tidy() {
 
 // ===== 画像 =====
 async function loadImage(file) {
-  const url = URL.createObjectURL(file);
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('画像を読み込めませんでした'));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(file);
+  });
   const img = new Image();
-  img.src = url;
+  img.src = dataUrl;
   await img.decode();
   const id = 'i' + (++imgSeq);
   const name = file.name && file.name !== 'image.png' ? file.name : '貼り付け画像';
-  IMGS.set(id, { img, url, name, w: img.naturalWidth, h: img.naturalHeight });
+  IMGS.set(id, { img, dataUrl, name, w: img.naturalWidth, h: img.naturalHeight });
   return id;
 }
 
@@ -570,6 +687,11 @@ function resizeTo(W2, H2) {
       if (Math.abs(p.s - 1) < 1e-6) { p.s = 1; snapPixel(p); }
     } else fitPanel(i, 'cover');
   });
+  S.overlays.forEach(o => {
+    o.x *= kx; o.y *= ky; o.w *= kx; o.h *= ky;
+    if (o.fontSize) o.fontSize *= kl;
+    if (o.strokeWidth != null) o.strokeWidth *= kl;
+  });
   layoutView();
 }
 
@@ -599,12 +721,135 @@ function renderComposition(ctx, editor) {
       ctx.restore();
     }
   });
+  renderEffects(ctx);
   if (S.lw > 0) {
     ctx.strokeStyle = S.color; ctx.lineWidth = S.lw; ctx.lineCap = 'butt';
     ctx.beginPath();
     for (const s of G.splits) if (s.seg) { ctx.moveTo(s.seg[0].x, s.seg[0].y); ctx.lineTo(s.seg[1].x, s.seg[1].y); }
     ctx.stroke();
     if (S.frame) ctx.strokeRect(S.lw / 2, S.lw / 2, S.W - S.lw, S.H - S.lw);
+  }
+  renderOverlayObjects(ctx);
+}
+
+function overlayId() { return `o${Date.now().toString(36)}_${++overlaySeq}`; }
+function selectedOverlay() { return sel && sel.kind === 'overlay' ? S.overlays.find(o => o.id === sel.id) : null; }
+function overlayName(o) {
+  if (o.type === 'bubble') return o.style === 'round' ? '角丸吹き出し' : o.style === 'burst' ? '強調吹き出し' : '吹き出し';
+  if (o.type === 'text') return '文字';
+  if (o.type === 'shape') return o.shape === 'ellipse' ? '楕円' : o.shape === 'line' ? '直線' : o.patch ? '色隠し' : '四角';
+  return o.kind === 'blur' ? 'ぼかし' : 'モザイク';
+}
+function overlayDefaults(kind) {
+  const unit = Math.min(S.W, S.H), w = Math.max(160, S.W * .34), h = Math.max(100, S.H * .18);
+  const common = { id: overlayId(), x: (S.W - w) / 2, y: (S.H - h) / 2, w, h, visible: true, locked: false };
+  if (kind.startsWith('bubble-')) return { ...common, type: 'bubble', style: kind.slice(7), fill: '#ffffff', stroke: '#111111', strokeWidth: Math.max(3, unit * .006), text: 'セリフ', vertical: true, textColor: '#111111', fontSize: Math.max(28, unit * .045) };
+  if (kind === 'text') return { ...common, type: 'text', w: Math.max(120, S.W * .28), h: Math.max(80, S.H * .16), text: '文字', vertical: false, textColor: '#111111', fontSize: Math.max(28, unit * .05), stroke: '#ffffff', strokeWidth: Math.max(0, unit * .004) };
+  return { ...common, type: 'shape', shape: kind, fill: kind === 'line' ? '#111111' : '#ffffff', stroke: '#111111', strokeWidth: Math.max(3, unit * .006) };
+}
+function addOverlay(kind) {
+  const o = overlayDefaults(kind);
+  S.overlays.push(o); sel = { kind: 'overlay', id: o.id };
+  draw(); refreshSide(); commit();
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath(); ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr); ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr); ctx.arcTo(x, y, x + w, y, rr); ctx.closePath();
+}
+function bubblePath(ctx, o) {
+  const tailW = Math.min(o.w * .22, o.h * .35), tailH = Math.min(o.h * .22, o.w * .12);
+  const bodyH = Math.max(12, o.h - tailH);
+  if (o.style === 'burst') {
+    const cx = o.x + o.w / 2, cy = o.y + bodyH / 2, n = 18;
+    ctx.beginPath();
+    for (let i = 0; i < n * 2; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / n, rad = i % 2 ? .82 : 1;
+      const px = cx + Math.cos(a) * o.w * .5 * rad, py = cy + Math.sin(a) * bodyH * .5 * rad;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath(); return;
+  }
+  ctx.beginPath();
+  if (o.style === 'round') roundRectPath(ctx, o.x, o.y, o.w, bodyH, Math.min(o.w, bodyH) * .18);
+  else { ctx.ellipse(o.x + o.w / 2, o.y + bodyH / 2, o.w / 2, bodyH / 2, 0, 0, Math.PI * 2); }
+  ctx.moveTo(o.x + o.w * .62 - tailW / 2, o.y + bodyH - 2);
+  ctx.lineTo(o.x + o.w * .62 + tailW / 2, o.y + bodyH - 2);
+  ctx.lineTo(o.x + o.w * .72, o.y + o.h);
+  ctx.closePath();
+}
+function wrapLines(ctx, text, maxWidth) {
+  const out = [];
+  for (const paragraph of String(text || '').split('\n')) {
+    let line = '';
+    for (const ch of Array.from(paragraph || ' ')) {
+      if (line && ctx.measureText(line + ch).width > maxWidth) { out.push(line); line = ch; } else line += ch;
+    }
+    out.push(line || ' ');
+  }
+  return out;
+}
+function drawOverlayText(ctx, o, box) {
+  const fs = Math.max(8, o.fontSize || 32), text = String(o.text || '');
+  ctx.save(); ctx.fillStyle = o.textColor || '#111111'; ctx.strokeStyle = o.stroke || '#ffffff';
+  ctx.lineWidth = o.type === 'text' ? Math.max(0, o.strokeWidth || 0) : 0;
+  ctx.lineJoin = 'round'; ctx.font = `700 ${fs}px "Yu Gothic UI", "Meiryo UI", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (o.vertical) {
+    const columns = text.split('\n'), columnStep = fs * 1.18;
+    columns.forEach((column, ci) => {
+      const glyphs = Array.from(column), x = box.x + box.w / 2 + (columns.length - 1) * columnStep / 2 - ci * columnStep;
+      const startY = box.y + box.h / 2 - (glyphs.length - 1) * fs * .56;
+      glyphs.forEach((ch, i) => { const y = startY + i * fs * 1.12; if (ctx.lineWidth) ctx.strokeText(ch, x, y); ctx.fillText(ch, x, y); });
+    });
+  } else {
+    const lines = wrapLines(ctx, text, Math.max(16, box.w)), step = fs * 1.18;
+    const y0 = box.y + box.h / 2 - (lines.length - 1) * step / 2;
+    lines.forEach((line, i) => { if (ctx.lineWidth) ctx.strokeText(line, box.x + box.w / 2, y0 + i * step); ctx.fillText(line, box.x + box.w / 2, y0 + i * step); });
+  }
+  ctx.restore();
+}
+function renderOverlayObjects(ctx) {
+  for (const o of S.overlays) {
+    if (!o.visible || o.type === 'effect') continue;
+    ctx.save();
+    if (o.type === 'bubble') {
+      bubblePath(ctx, o); ctx.fillStyle = o.fill; ctx.fill(); ctx.strokeStyle = o.stroke; ctx.lineWidth = o.strokeWidth; ctx.stroke();
+      drawOverlayText(ctx, o, { x: o.x + o.w * .13, y: o.y + o.h * .08, w: o.w * .74, h: o.h * .7 });
+    } else if (o.type === 'shape') {
+      ctx.beginPath();
+      if (o.shape === 'ellipse') ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, o.w / 2, o.h / 2, 0, 0, Math.PI * 2);
+      else if (o.shape === 'line') { ctx.moveTo(o.x, o.y + o.h / 2); ctx.lineTo(o.x + o.w, o.y + o.h / 2); }
+      else ctx.rect(o.x, o.y, o.w, o.h);
+      if (o.shape !== 'line') { ctx.fillStyle = o.fill; ctx.fill(); }
+      if (o.strokeWidth > 0) { ctx.strokeStyle = o.stroke; ctx.lineWidth = o.strokeWidth; ctx.stroke(); }
+    } else if (o.type === 'text') drawOverlayText(ctx, o, o);
+    ctx.restore();
+  }
+}
+function renderEffects(ctx) {
+  const effects = S.overlays.filter(o => o.visible && o.type === 'effect');
+  if (!effects.length) return;
+  const transform = ctx.getTransform(), source = document.createElement('canvas');
+  source.width = ctx.canvas.width; source.height = ctx.canvas.height;
+  source.getContext('2d').drawImage(ctx.canvas, 0, 0);
+  for (const o of effects) {
+    const x = Math.max(0, Math.min(S.W, o.x)), y = Math.max(0, Math.min(S.H, o.y));
+    const w = Math.max(1, Math.min(S.W - x, o.w)), h = Math.max(1, Math.min(S.H - y, o.h));
+    const sx = transform.e + x * transform.a, sy = transform.f + y * transform.d;
+    const sw = Math.max(1, w * transform.a), sh = Math.max(1, h * transform.d);
+    const tile = document.createElement('canvas'); tile.width = Math.max(1, Math.ceil(w)); tile.height = Math.max(1, Math.ceil(h));
+    const tc = tile.getContext('2d');
+    if (o.kind === 'mosaic') {
+      const factor = Math.max(3, Math.round(o.strength || 18)), tiny = document.createElement('canvas');
+      tiny.width = Math.max(1, Math.ceil(w / factor)); tiny.height = Math.max(1, Math.ceil(h / factor));
+      const sc = tiny.getContext('2d'); sc.imageSmoothingEnabled = false; sc.drawImage(source, sx, sy, sw, sh, 0, 0, tiny.width, tiny.height);
+      tc.imageSmoothingEnabled = false; tc.drawImage(tiny, 0, 0, tiny.width, tiny.height, 0, 0, tile.width, tile.height);
+    } else {
+      tc.filter = `blur(${Math.max(2, (o.strength || 18) / 2)}px)`;
+      tc.drawImage(source, sx, sy, sw, sh, -12, -12, tile.width + 24, tile.height + 24);
+      tc.filter = 'none';
+    }
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.drawImage(tile, x, y, w, h); ctx.restore();
   }
 }
 
@@ -643,7 +888,7 @@ function draw() {
     const p = S.panels[sel.i];
     if (p && p.s != null && !drag) {
       const c = centroid(G.leaves[sel.i].poly), pct = Math.round(p.s * 1000) / 10;
-      const txt = pct > 100 ? `${pct}%（元より拡大）` : `${pct}%`;
+      const txt = pct > 100 ? `${pct}%(元より拡大)` : `${pct}%`;
       ctx.save();
       ctx.font = `600 ${12 * px}px "Yu Gothic UI", system-ui, sans-serif`;
       const tw = ctx.measureText(txt).width;
@@ -673,6 +918,19 @@ function draw() {
       });
     }
   });
+
+  if (toolDraft) {
+    const d = normalizedRect(toolDraft.start, toolDraft.end);
+    ctx.save(); ctx.strokeStyle = accent; ctx.lineWidth = 2 * px; ctx.setLineDash([7 * px, 4 * px]); ctx.strokeRect(d.x, d.y, d.w, d.h); ctx.restore();
+  }
+  const activeOverlay = selectedOverlay();
+  if (activeOverlay && activeOverlay.visible) {
+    const hs = 10 * px;
+    ctx.save(); ctx.strokeStyle = accent; ctx.lineWidth = 2 * px; ctx.setLineDash([7 * px, 4 * px]);
+    ctx.strokeRect(activeOverlay.x, activeOverlay.y, activeOverlay.w, activeOverlay.h);
+    ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.fillRect(activeOverlay.x + activeOverlay.w - hs, activeOverlay.y + activeOverlay.h - hs, hs * 2, hs * 2);
+    ctx.strokeRect(activeOverlay.x + activeOverlay.w - hs, activeOverlay.y + activeOverlay.h - hs, hs * 2, hs * 2); ctx.restore();
+  }
 }
 
 function layoutView() {
@@ -689,8 +947,8 @@ function layoutView() {
 // ===== 元に戻す =====
 let undoStack = [], redoStack = [], lastSnap = null, softTimer = null;
 function snapshot() {
-  const { W, H, aspect, auto, lw, color, bg, frame, tpl, tree, panels } = S;
-  return JSON.stringify({ W, H, aspect, auto, lw, color, bg, frame, tpl, tree, panels });
+  const { W, H, aspect, auto, lw, color, bg, frame, noGap, tpl, tree, panels, overlays } = S;
+  return JSON.stringify({ W, H, aspect, auto, lw, color, bg, frame, noGap, tpl, tree, panels, overlays });
 }
 function commit() {
   clearTimeout(softTimer); softTimer = null;
@@ -702,10 +960,12 @@ function commit() {
   lastSnap = s;
   updateUndoButtons();
   saveSettings();
+  scheduleAutosave();
 }
 function softCommit() { clearTimeout(softTimer); softTimer = setTimeout(commit, 450); }
 function restore(s) {
   Object.assign(S, JSON.parse(s));
+  if (!Array.isArray(S.overlays)) S.overlays = [];
   sel = null; hover = null;
   computeGeom(); layoutView(); syncInputs(); refreshSide();
 }
@@ -739,7 +999,7 @@ function setLayout(key) {
   }
   S.panels.forEach((p, i) => fitPanel(i, 'cover'));
   sel = null;
-  if (old.length > n) toast(`${old.length - n}枚はコマが足りないので外しました（Ctrl+Zで戻せます）`);
+  if (old.length > n) toast(`${old.length - n}枚はコマが足りないので外しました(Ctrl+Zで戻せます)`);
   layoutView(); syncInputs(); refreshSide(); commit();
 }
 
@@ -826,12 +1086,60 @@ function straighten(dir) {
   tidy(); keepCover(saved); draw(); commit();
 }
 
-// ===== マウス操作 =====
+// ===== ポインター操作 =====
 function toOut(e) {
   const r = view.getBoundingClientRect();
   return { x: (e.clientX - r.left) / vs, y: (e.clientY - r.top) / vs };
 }
 function panelAt(m) { return G.leaves.findIndex(l => pointInPoly(m, l.poly)); }
+function normalizedRect(a, b) {
+  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+  return { x, y, w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+}
+function overlayAt(m) {
+  for (let i = S.overlays.length - 1; i >= 0; i--) {
+    const o = S.overlays[i];
+    if (o.visible && m.x >= o.x && m.y >= o.y && m.x <= o.x + o.w && m.y <= o.y + o.h) return o;
+  }
+  return null;
+}
+function overlayHandleAt(m) {
+  const o = selectedOverlay();
+  if (!o || !o.visible || o.locked) return false;
+  return Math.hypot(m.x - (o.x + o.w), m.y - (o.y + o.h)) <= 16 / vs;
+}
+function clampOverlay(o) {
+  o.w = Math.max(24, Math.min(S.W, o.w)); o.h = Math.max(24, Math.min(S.H, o.h));
+  o.x = Math.max(-o.w * .8, Math.min(S.W - o.w * .2, o.x));
+  o.y = Math.max(-o.h * .8, Math.min(S.H - o.h * .2, o.y));
+}
+function sampleOutputColor(m) {
+  const c = renderFull(), ctx = c.getContext('2d', { willReadFrequently: true });
+  const x = Math.max(0, Math.min(S.W - 1, Math.round(m.x))), y = Math.max(0, Math.min(S.H - 1, Math.round(m.y)));
+  const p = ctx.getImageData(x, y, 1, 1).data;
+  return '#' + [p[0], p[1], p[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function setOverlayTool(tool) {
+  overlayTool = tool; toolDraft = null;
+  view.classList.toggle('overlay-tool', !!tool);
+  document.querySelectorAll('[data-overlay-tool]').forEach(b => b.classList.toggle('on', b.dataset.overlayTool === tool));
+  $('toolCancel').classList.toggle('hidden', !tool);
+  $('toolNote').textContent = tool ? 'キャンバス上をドラッグして範囲を作ります。' : 'ボタンを押し、キャンバス上をドラッグして範囲を作ります。';
+  draw();
+}
+function finishToolDraft() {
+  if (!toolDraft) return false;
+  const d = normalizedRect(toolDraft.start, toolDraft.end), min = Math.max(18, 12 / vs);
+  if (d.w < min || d.h < min) { toolDraft = null; draw(); return true; }
+  let o;
+  if (overlayTool === 'patch') {
+    o = { id: overlayId(), type: 'shape', shape: 'rect', patch: true, x: d.x, y: d.y, w: d.w, h: d.h, fill: toolDraft.color, stroke: toolDraft.color, strokeWidth: 0, visible: true, locked: false };
+  } else {
+    o = { id: overlayId(), type: 'effect', kind: overlayTool, x: d.x, y: d.y, w: d.w, h: d.h, strength: 18, visible: true, locked: false };
+  }
+  S.overlays.push(o); sel = { kind: 'overlay', id: o.id }; toolDraft = null; setOverlayTool(null);
+  refreshSide(); commit(); return true;
+}
 
 function hitTest(m) {
   const r = 9 / vs;
@@ -925,10 +1233,37 @@ function moveEnd(m, shift) {
 }
 
 view.addEventListener('pointerdown', e => {
-  if (e.button !== 0) return;
+  if (e.button !== 0 && e.pointerType === 'mouse') return;
   if (softTimer) commit();  // ホイール操作の直後でも、戻すときは別々の1手にする
-  const m = toOut(e), h = hitTest(m);
-  view.setPointerCapture(e.pointerId);
+  const m = toOut(e);
+  try { view.setPointerCapture(e.pointerId); } catch (captureError) { /* synthetic/older WebKit: drag still works */ }
+  if (e.pointerType === 'touch') {
+    touchPointers.set(e.pointerId, m);
+    if (touchPointers.size === 2) {
+      const pts = [...touchPointers.values()], mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      const i = panelAt(mid), p = i >= 0 ? S.panels[i] : null;
+      if (p) {
+        pinch = { i, distance: Math.max(1, dist(pts[0], pts[1])), mid, s: p.s, x: p.x, y: p.y };
+        drag = null; sel = { kind: 'panel', i }; refreshSide(); draw(); e.preventDefault(); return;
+      }
+    }
+  }
+  if (overlayTool) {
+    toolDraft = { start: m, end: m, color: overlayTool === 'patch' ? sampleOutputColor(m) : null };
+    sel = null; draw(); e.preventDefault(); return;
+  }
+  if (overlayHandleAt(m)) {
+    const o = selectedOverlay();
+    drag = { type: 'overlay-resize', id: o.id, start: m, w: o.w, h: o.h };
+    e.preventDefault(); return;
+  }
+  const oh = overlayAt(m);
+  if (oh) {
+    sel = { kind: 'overlay', id: oh.id };
+    if (!oh.locked) drag = { type: 'overlay-move', id: oh.id, start: m, x: oh.x, y: oh.y };
+    refreshSide(); draw(); e.preventDefault(); return;
+  }
+  const h = hitTest(m);
   if (!h) { sel = null; }
   else if (h.kind === 'end') { sel = { kind: 'line', i: h.i }; startEndDrag(h.i, h.k); }
   else if (h.kind === 'line') { sel = { kind: 'line', i: h.i }; startLineDrag(h.i, m, e.shiftKey); }
@@ -942,9 +1277,26 @@ view.addEventListener('pointerdown', e => {
 
 view.addEventListener('pointermove', e => {
   const m = toOut(e);
+  if (e.pointerType === 'touch' && touchPointers.has(e.pointerId)) touchPointers.set(e.pointerId, m);
   inside = true;
+  if (pinch && touchPointers.size >= 2) {
+    const pts = [...touchPointers.values()], nextMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    const nextDistance = Math.max(1, dist(pts[0], pts[1])), p = S.panels[pinch.i];
+    p.s = pinch.s; p.x = pinch.x; p.y = pinch.y;
+    zoomAt(p, pinch.mid, nextDistance / pinch.distance, true);
+    p.x += nextMid.x - pinch.mid.x; p.y += nextMid.y - pinch.mid.y; clampPanel(pinch.i);
+    draw(); refreshSide(); e.preventDefault(); return;
+  }
+  if (toolDraft) { toolDraft.end = m; draw(); e.preventDefault(); return; }
   if (drag) {
-    if (drag.type === 'pan') {
+    if (drag.type === 'overlay-move' || drag.type === 'overlay-resize') {
+      const o = S.overlays.find(item => item.id === drag.id);
+      if (o) {
+        if (drag.type === 'overlay-move') { o.x = drag.x + m.x - drag.start.x; o.y = drag.y + m.y - drag.start.y; }
+        else { o.w = drag.w + m.x - drag.start.x; o.h = drag.h + m.y - drag.start.y; }
+        clampOverlay(o);
+      }
+    } else if (drag.type === 'pan') {
       const p = S.panels[drag.i];
       let dx = m.x - drag.start.x, dy = m.y - drag.start.y;
       if (e.shiftKey) {
@@ -967,16 +1319,24 @@ view.addEventListener('pointermove', e => {
 });
 
 function endDrag() {
+  if (finishToolDraft()) return;
+  if (pinch) { pinch = null; draw(); commit(); refreshSide(); return; }
   if (!drag) return;
   const d = drag;
   drag = null;
+  if (d.type === 'overlay-move' || d.type === 'overlay-resize') { draw(); commit(); refreshSide(); return; }
   if (d.type === 'swap') { if (d.to >= 0 && d.to !== d.from) { swapPanels(d.from, d.to); return; } }
   if (d.type === 'line' || d.type === 'end') { tidy(); S.panels.forEach((p, i) => clampPanel(i)); }
   if (d.type === 'pan') { const p = S.panels[d.i]; if (p && p.s === 1) snapPixel(p); clampPanel(d.i); }
   draw(); commit(); refreshSide();
 }
-view.addEventListener('pointerup', endDrag);
-view.addEventListener('pointercancel', endDrag);
+function finishPointer(e) {
+  if (e.pointerType === 'touch') touchPointers.delete(e.pointerId);
+  try { if (view.hasPointerCapture(e.pointerId)) view.releasePointerCapture(e.pointerId); } catch (captureError) { /* no active capture */ }
+  endDrag();
+}
+view.addEventListener('pointerup', finishPointer);
+view.addEventListener('pointercancel', finishPointer);
 view.addEventListener('pointerleave', () => { inside = false; if (!drag) { hover = null; draw(); } });
 
 view.addEventListener('dblclick', e => {
@@ -1067,7 +1427,7 @@ async function savePNG() {
       const w = await handle.createWritable();
       await w.write(await toBlob(renderFull()));
       await w.close();
-      toast(`保存しました：${handle.name}（${S.W}×${S.H}）`);
+      toast(`保存しました：${handle.name}(${S.W}×${S.H})`);
       return;
     }
   }
@@ -1082,7 +1442,7 @@ async function copyPNG() {
   if (!navigator.clipboard || !window.ClipboardItem) { toast('このブラウザではコピーが使えません。「PNGで保存」を使ってください'); return; }
   try {
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': toBlob(renderFull()) })]);
-    toast(`クリップボードにコピーしました（${S.W}×${S.H}）`);
+    toast(`クリップボードにコピーしました(${S.W}×${S.H})`);
   } catch (e) {
     toast('コピーできませんでした：' + e.message);
   }
@@ -1101,8 +1461,20 @@ document.addEventListener('keydown', e => {
   if (ctrl && key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
   else if (ctrl && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
   else if (ctrl && key === 'c' && !String(window.getSelection())) { e.preventDefault(); copyPNG(); }
-  else if (key === 'escape') { sel = null; refreshSide(); draw(); }
+  else if (key === 'escape') { if (overlayTool) setOverlayTool(null); else { sel = null; refreshSide(); draw(); } }
+  else if ((key === 'delete' || key === 'backspace') && sel && sel.kind === 'overlay') {
+    e.preventDefault();
+    const index = S.overlays.findIndex(o => o.id === sel.id);
+    if (index >= 0) { S.overlays.splice(index, 1); sel = null; draw(); refreshSide(); commit(); }
+  }
   else if ((key === 'delete' || key === 'backspace') && sel && sel.kind === 'panel') { e.preventDefault(); removeImage(sel.i); }
+  else if (key.startsWith('arrow') && sel && sel.kind === 'overlay') {
+    const o = selectedOverlay(); if (!o || o.locked) return;
+    e.preventDefault(); const st = e.shiftKey ? 10 : 1;
+    if (key === 'arrowleft') o.x -= st; if (key === 'arrowright') o.x += st;
+    if (key === 'arrowup') o.y -= st; if (key === 'arrowdown') o.y += st;
+    clampOverlay(o); draw(); softCommit();
+  }
   else if (key.startsWith('arrow') && sel && sel.kind === 'panel' && S.panels[sel.i]) {
     e.preventDefault();
     const p = S.panels[sel.i], st = e.shiftKey ? 10 : 1;
@@ -1138,17 +1510,59 @@ function refreshSide() {
   $('lineTools').classList.toggle('hidden', !(sel && sel.kind === 'line'));
   if (isPanel) {
     const p = S.panels[sel.i], im = p && IMGS.get(p.id);
-    $('panelTitle').textContent = `コマ ${sel.i + 1}` + (im ? `：${im.name}` : '（空き）');
+    $('panelTitle').textContent = `コマ ${sel.i + 1}` + (im ? `：${im.name}` : '(空き)');
     document.querySelectorAll('#panelTools button[data-fit], #removeHere, #zoomRange, #zoomNum').forEach(el => el.disabled = !p);
     if (p) {
       const pct = Math.round(p.s * 1000) / 10;
       $('zoomRange').value = Math.log2(p.s);
       $('zoomNum').value = pct;
       $('zoomNote').innerHTML = `元画像 ${im.w}×${im.h}　→　表示 ${Math.round(im.w * p.s)}×${Math.round(im.h * p.s)}<br>` +
-        (pct > 100.05 ? '<span class="warn">元より拡大しているので少しぼやけます</span>' : pct === 100 ? '100%：元画像のピクセルそのまま' : '元画像より縮小（画質は保たれます）');
+        (pct > 100.05 ? '<span class="warn">元より拡大しているので少しぼやけます</span>' : pct === 100 ? '100%：元画像のピクセルそのまま' : '元画像より縮小(画質は保たれます)');
     } else $('zoomNote').textContent = '画像をドロップするか「このコマに画像を開く」で入れます。';
   }
   renderList();
+  refreshOverlayUI();
+}
+
+function renderOverlayList() {
+  const ul = $('overlayList'); ul.innerHTML = '';
+  $('overlayEmpty').classList.toggle('hidden', S.overlays.length > 0);
+  [...S.overlays].reverse().forEach(o => {
+    const li = document.createElement('li');
+    const main = document.createElement('button');
+    main.className = 'layer-main' + (sel && sel.kind === 'overlay' && sel.id === o.id ? ' on' : '');
+    main.textContent = overlayName(o); main.onclick = () => { sel = { kind: 'overlay', id: o.id }; refreshSide(); draw(); };
+    const visible = document.createElement('button'); visible.className = 'layer-icon'; visible.title = o.visible ? '非表示にする' : '表示する'; visible.textContent = o.visible ? '表示' : '非表示';
+    visible.onclick = () => { o.visible = !o.visible; draw(); refreshSide(); commit(); };
+    const locked = document.createElement('button'); locked.className = 'layer-icon'; locked.title = o.locked ? '固定を外す' : '固定する'; locked.textContent = o.locked ? '固定' : '可動';
+    locked.onclick = () => { o.locked = !o.locked; refreshSide(); commit(); };
+    li.append(main, visible, locked); ul.appendChild(li);
+  });
+}
+function refreshOverlayUI() {
+  const o = selectedOverlay(), box = $('overlaySelection'); box.hidden = !o;
+  renderOverlayList();
+  if (!o) return;
+  $('overlayTitle').textContent = `選んだ素材: ${overlayName(o)}`;
+  const textOn = o.type === 'text' || o.type === 'bubble';
+  const shapeOn = o.type === 'shape' || o.type === 'bubble';
+  $('textFields').hidden = !textOn; $('shapeFields').hidden = !shapeOn; $('effectFields').hidden = o.type !== 'effect';
+  if (textOn) {
+    $('overlayText').value = o.text || ''; $('overlayVertical').checked = !!o.vertical;
+    $('overlayTextColor').value = o.textColor || '#111111'; $('overlayFontSize').value = Math.round(o.fontSize || 32);
+  }
+  if (shapeOn) {
+    $('overlayFill').value = o.fill || '#ffffff'; $('overlayStroke').value = o.stroke || '#111111'; $('overlayStrokeWidth').value = Math.round(o.strokeWidth || 0);
+  }
+  if (o.type === 'effect') { $('overlayStrength').value = o.strength || 18; $('overlayStrengthValue').textContent = String(o.strength || 18); }
+  $('overlayVisible').checked = !!o.visible; $('overlayLocked').checked = !!o.locked;
+  $('overlayBack').disabled = S.overlays.indexOf(o) === 0;
+  $('overlayFront').disabled = S.overlays.indexOf(o) === S.overlays.length - 1;
+}
+function patchSelectedOverlay(patch, live = false) {
+  const o = selectedOverlay(); if (!o) return;
+  Object.assign(o, patch); clampOverlay(o); draw(); renderOverlayList();
+  if (live) softCommit(); else commit();
 }
 
 function renderList() {
@@ -1161,10 +1575,10 @@ function renderList() {
     if (sel && sel.kind === 'panel' && sel.i === i) li.classList.add('sel');
     const pct = p ? Math.round(p.s * 1000) / 10 : 0;
     li.innerHTML = `<span class="num">${i + 1}</span>` +
-      (im ? `<img class="thumb" draggable="false" src="${im.url}">` : '<span class="thumb"></span>') +
+      (im ? `<img class="thumb" draggable="false" src="${im.dataUrl}">` : '<span class="thumb"></span>') +
       `<div class="meta"><div class="name"></div><div class="sub">${im ? `${im.w}×${im.h}　<span class="${pct > 100.05 ? 'warn' : ''}">${pct}%</span>` : '空き'}</div></div>` +
       (p ? '<button class="x" title="画像を外す">×</button>' : '');
-    li.querySelector('.name').textContent = im ? im.name : '（画像なし）';
+    li.querySelector('.name').textContent = im ? im.name : '(画像なし)';
     li.onclick = ev => {
       if (ev.target.classList.contains('x')) { removeImage(i); return; }
       sel = { kind: 'panel', i }; refreshSide(); draw();
@@ -1263,6 +1677,39 @@ function manualSize(which) {
 }
 $('wNum').onchange = () => manualSize('w');
 $('hNum').onchange = () => manualSize('h');
+$('shortsBtn').onclick = () => {
+  S.auto = false; S.aspect = '9:16'; sizeCapped = false; resizeTo(1080, 1920);
+  syncInputs(); refreshSide(); commit(); toast('完成サイズを1080×1920pxにしました');
+};
+
+document.querySelectorAll('[data-add-overlay]').forEach(b => b.onclick = () => addOverlay(b.dataset.addOverlay));
+document.querySelectorAll('[data-overlay-tool]').forEach(b => b.onclick = () => setOverlayTool(overlayTool === b.dataset.overlayTool ? null : b.dataset.overlayTool));
+$('toolCancel').onclick = () => setOverlayTool(null);
+$('overlayText').oninput = e => patchSelectedOverlay({ text: e.target.value }, true);
+$('overlayText').onchange = commit;
+$('overlayVertical').onchange = e => patchSelectedOverlay({ vertical: e.target.checked });
+$('overlayTextColor').oninput = e => patchSelectedOverlay({ textColor: e.target.value }, true);
+$('overlayTextColor').onchange = commit;
+$('overlayFontSize').onchange = e => patchSelectedOverlay({ fontSize: Math.max(8, +e.target.value || 32) });
+$('overlayFill').oninput = e => patchSelectedOverlay({ fill: e.target.value }, true);
+$('overlayFill').onchange = commit;
+$('overlayStroke').oninput = e => patchSelectedOverlay({ stroke: e.target.value }, true);
+$('overlayStroke').onchange = commit;
+$('overlayStrokeWidth').onchange = e => patchSelectedOverlay({ strokeWidth: Math.max(0, +e.target.value || 0) });
+$('overlayStrength').oninput = e => { $('overlayStrengthValue').textContent = e.target.value; patchSelectedOverlay({ strength: +e.target.value }, true); };
+$('overlayStrength').onchange = commit;
+$('overlayVisible').onchange = e => patchSelectedOverlay({ visible: e.target.checked });
+$('overlayLocked').onchange = e => patchSelectedOverlay({ locked: e.target.checked });
+$('overlayDelete').onclick = () => {
+  const o = selectedOverlay(); if (!o) return;
+  S.overlays = S.overlays.filter(item => item.id !== o.id); sel = null; draw(); refreshSide(); commit();
+};
+$('overlayBack').onclick = () => {
+  const o = selectedOverlay(), i = o && S.overlays.indexOf(o); if (i > 0) { S.overlays.splice(i, 1); S.overlays.unshift(o); draw(); refreshSide(); commit(); }
+};
+$('overlayFront').onclick = () => {
+  const o = selectedOverlay(), i = o && S.overlays.indexOf(o); if (i >= 0 && i < S.overlays.length - 1) { S.overlays.splice(i, 1); S.overlays.push(o); draw(); refreshSide(); commit(); }
+};
 
 // 選んだコマの操作
 document.querySelectorAll('#panelTools button[data-fit]').forEach(b => b.onclick = () => {
@@ -1287,7 +1734,7 @@ $('clearBtn').onclick = () => {
   if (!S.panels.some(Boolean)) return;
   S.panels = S.panels.map(() => null);
   layoutView(); syncInputs(); refreshSide(); commit();
-  toast('全部外しました（Ctrl+Zで戻せます）');
+  toast('全部外しました(Ctrl+Zで戻せます)');
 };
 
 // ===== 小物 =====
@@ -1321,6 +1768,67 @@ function loadSettings() {
   } catch (e) { /* 壊れていたら初期値のまま */ }
 }
 
+// 画像を含む作業状態はIndexedDBへ保存する。通信は行わない。
+const AUTOSAVE_DB = 'koma-studio-autosave-v1';
+let autosaveReady = false, autosaveTimer = null;
+function openAutosaveDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+    const req = indexedDB.open(AUTOSAVE_DB, 1);
+    req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('project')) req.result.createObjectStore('project'); };
+    req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
+  });
+}
+async function autosaveGet() {
+  const db = await openAutosaveDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('project', 'readonly'), req = tx.objectStore('project').get('current');
+    req.onsuccess = () => resolve(req.result || null); req.onerror = () => reject(req.error); tx.oncomplete = () => db.close();
+  });
+}
+async function autosavePut(value) {
+  const db = await openAutosaveDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('project', 'readwrite'); tx.objectStore('project').put(value, 'current');
+    tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+function scheduleAutosave() {
+  if (!autosaveReady || (!S.panels.some(Boolean) && !S.overlays.length)) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(async () => {
+    try {
+      const used = new Set(S.panels.filter(Boolean).map(p => p.id));
+      const images = [...IMGS.entries()].filter(([id]) => used.has(id)).map(([id, im]) => ({ id, name: im.name, w: im.w, h: im.h, dataUrl: im.dataUrl }));
+      await autosavePut({ snapshot: snapshot(), images, savedAt: Date.now() });
+      $('recoveryStatus').textContent = 'この端末へ自動保存済み'; $('recoverBtn').classList.remove('hidden');
+    } catch (e) { $('recoveryStatus').textContent = '自動保存を使えません'; }
+  }, 650);
+}
+async function imageFromAutosave(saved) {
+  const img = new Image(); img.src = saved.dataUrl; await img.decode();
+  return { img, dataUrl: saved.dataUrl, name: saved.name, w: saved.w || img.naturalWidth, h: saved.h || img.naturalHeight };
+}
+async function checkAutosave() {
+  try {
+    const saved = await autosaveGet(); autosaveReady = true;
+    if (saved && saved.snapshot) { $('recoveryStatus').textContent = '前回の自動保存があります'; $('recoverBtn').classList.remove('hidden'); }
+    else $('recoveryStatus').textContent = '自動保存はまだありません';
+  } catch (e) { autosaveReady = false; $('recoveryStatus').textContent = '自動保存を使えません'; }
+}
+async function recoverAutosave() {
+  try {
+    const saved = await autosaveGet();
+    if (!saved || !saved.snapshot) { toast('復旧できる作業がありません'); return; }
+    IMGS.clear();
+    for (const item of saved.images || []) IMGS.set(item.id, await imageFromAutosave(item));
+    const ids = [...IMGS.keys()].map(id => +(id.slice(1)) || 0); imgSeq = Math.max(0, ...ids);
+    undoStack = []; redoStack = []; lastSnap = saved.snapshot; restore(saved.snapshot); updateUndoButtons();
+    $('recoveryStatus').textContent = '前回の作業を復旧しました'; toast('前回の作業を復旧しました');
+  } catch (e) { toast('自動保存を復旧できませんでした'); }
+}
+$('recoverBtn').onclick = recoverAutosave;
+
 // ===== 起動 =====
 // サイトで開いたときだけ「オフライン用に保存」を出す（保存したファイルを開いたときは不要）
 if (/^https?:$/.test(location.protocol)) {
@@ -1336,6 +1844,20 @@ syncInputs(); refreshSide();
 new ResizeObserver(layoutView).observe(stage);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { renderTplIcons(countOf(S.tpl)); draw(); });
 commit();
+checkAutosave();
+
+// Playwright検査は画面操作の結果を、完成画像と同じ経路で照合する。
+window.__komaTest = {
+  getState: () => JSON.parse(snapshot()),
+  getGeometry: () => ({ leaves: G.leaves.map(l => ({ poly: l.poly, bb: l.bb })), splits: G.splits.map(s => ({ seg: s.seg })) }),
+  renderDataUrl: () => renderFull().toDataURL('image/png'),
+  samplePixel: (x, y) => {
+    const c = renderFull(), p = c.getContext('2d', { willReadFrequently: true }).getImageData(Math.max(0, Math.min(S.W - 1, Math.round(x))), Math.max(0, Math.min(S.H - 1, Math.round(y))), 1, 1).data;
+    return [p[0], p[1], p[2], p[3]];
+  },
+  getImages: () => [...IMGS.values()].map(im => ({ name: im.name, w: im.w, h: im.h })),
+  autosaveGet,
+};
 </script>
 </body>
 </html>
